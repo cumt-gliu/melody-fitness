@@ -139,12 +139,58 @@ enum class WeightUnit(val label: String, val symbol: String) {
     LB("磅", "lb"),
 }
 
+data class BodyMetricTrendPoint(
+    val dateEpochDay: Long,
+    val weightKg: Float,
+    val bodyFatPercentage: Float?,
+    val waistCm: Float?,
+    val sleepHours: Float?,
+    val fatigueScore: Int?,
+)
+
+data class WeekOverWeekChanges(
+    val workoutCountChange: Int? = null,
+    val previousWeekWorkoutCount: Int = 0,
+    val cardioMinutesChange: Int? = null,
+    val previousWeekCardioMinutes: Int = 0,
+    val trainingDaysChange: Int? = null,
+    val previousWeekTrainingDays: Int = 0,
+    val weightChange: Float? = null,
+)
+
+data class WorkoutTypeCount(
+    val type: String,
+    val count: Int,
+)
+
+data class CardioDurationPoint(
+    val dateEpochDay: Long,
+    val totalMinutes: Int,
+)
+
+data class StrengthTrendPoint(
+    val dateEpochDay: Long,
+    val maxWeightKg: Float,
+    val volumeKg: Float,
+)
+
+data class WeeklyWorkoutCount(
+    val weekLabel: String,
+    val count: Int,
+)
+
 interface FitnessRepository {
     fun observeHomeSnapshot(): Flow<HomeSnapshot>
     fun observeWorkoutHistory(): Flow<List<WorkoutHistoryItem>>
     fun observeStrengthTemplates(): Flow<List<StrengthExerciseTemplate>>
     fun observeGoals(): Flow<List<GoalSummary>>
     fun observeStatsSnapshot(): Flow<StatsSnapshot>
+    fun observeBodyMetricTrend(): Flow<List<BodyMetricTrendPoint>>
+    fun observeWeeklyWorkoutCounts(weeks: Int): Flow<List<WeeklyWorkoutCount>>
+    fun observeWeekOverWeekChanges(): Flow<WeekOverWeekChanges>
+    fun observeCardioByDateRange(startDay: Long, endDay: Long): Flow<List<WorkoutTypeCount>>
+    fun observeCardioDurationTrend(startDay: Long, endDay: Long): Flow<List<CardioDurationPoint>>
+    fun observeStrengthTrend(startDay: Long, endDay: Long): Flow<Map<String, List<StrengthTrendPoint>>>
 
     suspend fun saveStrengthWorkout(input: StrengthWorkoutInput)
     suspend fun saveCardioWorkout(input: CardioWorkoutInput)

@@ -17,9 +17,12 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
+import java.time.temporal.WeekFields
+import java.util.Locale
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 class OfflineFitnessRepository(
@@ -172,6 +175,65 @@ class OfflineFitnessRepository(
                 latestFatigueScore = latestMetric?.fatigueScore,
             )
         }
+    }
+
+    override fun observeBodyMetricTrend(): Flow<List<BodyMetricTrendPoint>> {
+        return statsDao.observeBodyMetricTrend().map { rows ->
+            rows.map { row ->
+                BodyMetricTrendPoint(
+                    dateEpochDay = row.dateEpochDay,
+                    weightKg = row.weightKg,
+                    bodyFatPercentage = row.bodyFatPercentage,
+                    waistCm = row.waistCm,
+                    sleepHours = row.sleepHours,
+                    fatigueScore = row.fatigueScore,
+                )
+            }
+        }
+    }
+
+    override fun observeWeeklyWorkoutCounts(weeks: Int): Flow<List<WeeklyWorkoutCount>> {
+        return statsDao.observeWorkoutDates().map { dates ->
+            val today = LocalDate.now()
+            val weekField = WeekFields.of(Locale.getDefault()).weekOfWeekBasedYear()
+            val todayYearWeek = today.year * 100 + today.get(weekField)
+            val cutoff = today.minusWeeks(weeks.toLong()).toEpochDay()
+
+            val weeklyMap = mutableMapOf<Int, MutableList<LocalDate>>()
+            dates.filter { it >= cutoff }.forEach { epochDay ->
+                val date = LocalDate.ofEpochDay(epochDay)
+                val yw = date.year * 100 + date.get(weekField)
+                weeklyMap.getOrPut(yw) { mutableListOf() }.add(date)
+            }
+
+            (weeks - 1 downTo 0).map { weekAgo ->
+                val weekStart = today.minusWeeks(weekAgo.toLong())
+                val yw = weekStart.year * 100 + weekStart.get(weekField)
+                val count = weeklyMap[yw]?.size ?: 0
+                val month = weekStart.monthValue
+                val day = weekStart.dayOfMonth
+                WeeklyWorkoutCount(
+                    weekLabel = "${month}/${day}",
+                    count = count,
+                )
+            }.reversed()
+        }
+    }
+
+    override fun observeWeekOverWeekChanges(): Flow<WeekOverWeekChanges> {
+        return flowOf(WeekOverWeekChanges())
+    }
+
+    override fun observeCardioByDateRange(startDay: Long, endDay: Long): Flow<List<WorkoutTypeCount>> {
+        return flowOf(emptyList())
+    }
+
+    override fun observeCardioDurationTrend(startDay: Long, endDay: Long): Flow<List<CardioDurationPoint>> {
+        return flowOf(emptyList())
+    }
+
+    override fun observeStrengthTrend(startDay: Long, endDay: Long): Flow<Map<String, List<StrengthTrendPoint>>> {
+        return flowOf(emptyMap())
     }
 
     override suspend fun saveStrengthWorkout(input: StrengthWorkoutInput) {
