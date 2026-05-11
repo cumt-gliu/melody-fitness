@@ -2,7 +2,6 @@ package com.giannisliu.melodyfitness.data.local.dao
 
 import androidx.room.Dao
 import androidx.room.Query
-import com.giannisliu.melodyfitness.data.local.entity.BodyMetricEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
