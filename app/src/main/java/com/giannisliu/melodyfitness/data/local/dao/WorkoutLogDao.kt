@@ -19,6 +19,12 @@ interface WorkoutLogDao {
     @Query("SELECT COUNT(*) FROM workout_logs WHERE dateEpochDay >= :startEpochDay")
     fun observeWorkoutCountSince(startEpochDay: Long): Flow<Int>
 
+    @Query("SELECT COUNT(*) FROM workout_logs WHERE dateEpochDay BETWEEN :startDay AND :endDay")
+    fun observeWorkoutCountBetween(startDay: Long, endDay: Long): Flow<Int>
+
+    @Query("SELECT COUNT(DISTINCT dateEpochDay) FROM workout_logs WHERE dateEpochDay BETWEEN :startDay AND :endDay")
+    fun observeTrainingDaysBetween(startDay: Long, endDay: Long): Flow<Int>
+
     @Insert
     suspend fun insertWorkoutLog(workoutLog: WorkoutLogEntity): Long
 
