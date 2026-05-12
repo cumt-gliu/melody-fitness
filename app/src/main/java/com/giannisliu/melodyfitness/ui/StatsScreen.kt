@@ -2,6 +2,11 @@ package com.giannisliu.melodyfitness.ui
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -33,11 +38,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
@@ -86,44 +94,54 @@ fun StatsScreen(
     ) {
         SectionTitle(title = "训练统计")
 
-        OverviewRow(
-            weeklyWorkoutCount = uiState.weeklyWorkoutCount,
-            totalCardioMinutes = uiState.totalCardioMinutes,
-            latestWeightKg = uiState.latestWeightKg,
-            wow = uiState.weekOverWeekChanges,
-            onCardClick = { onUpdateActiveTab(it) },
-            sparklineData = uiState.sparklineData,
-        )
-
-        TimeRangeFilter(
-            selected = uiState.selectedTimeRange,
-            onSelect = onUpdateTimeRange,
-        )
-
-        StatsTabRow(
-            selected = uiState.activeTab,
-            onSelect = onUpdateActiveTab,
-        )
-
-        Crossfade(
-            targetState = uiState.selectedTimeRange,
-            animationSpec = tween(300),
-            label = "range-crossfade",
-        ) {
-            AnimatedContent(
-                targetState = uiState.activeTab,
-                transitionSpec = { fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300)) },
-                label = "tab-content",
-            ) { tab ->
-                when (tab) {
-                    StatsTab.TRAINING -> TrainingAnalysisTab(uiState)
-                    StatsTab.BODY -> BodyMetricsTab(uiState, weightUnit)
-                    StatsTab.STRENGTH -> StrengthProgressTab(uiState, onSelectExercise)
+        if (!uiState.isReady) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                repeat(4) {
+                    SkeletonCard(modifier = Modifier.weight(1f), chartHeight = 20)
                 }
             }
-        }
+            SkeletonCard(chartHeight = 60)
+            SkeletonCard(chartHeight = 80)
+        } else {
+            OverviewRow(
+                weeklyWorkoutCount = uiState.weeklyWorkoutCount,
+                totalCardioMinutes = uiState.totalCardioMinutes,
+                latestWeightKg = uiState.latestWeightKg,
+                wow = uiState.weekOverWeekChanges,
+                onCardClick = { onUpdateActiveTab(it) },
+                sparklineData = uiState.sparklineData,
+            )
 
-        StatsAdviceCard(uiState)
+            TimeRangeFilter(
+                selected = uiState.selectedTimeRange,
+                onSelect = onUpdateTimeRange,
+            )
+
+            StatsTabRow(
+                selected = uiState.activeTab,
+                onSelect = onUpdateActiveTab,
+            )
+
+            Crossfade(
+                targetState = uiState.selectedTimeRange,
+                animationSpec = tween(300),
+                label = "range-crossfade",
+            ) {
+                AnimatedContent(
+                    targetState = uiState.activeTab,
+                    transitionSpec = { fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300)) },
+                    label = "tab-content",
+                ) { tab ->
+                    when (tab) {
+                        StatsTab.TRAINING -> TrainingAnalysisTab(uiState)
+                        StatsTab.BODY -> BodyMetricsTab(uiState, weightUnit)
+                        StatsTab.STRENGTH -> StrengthProgressTab(uiState, onSelectExercise)
+                    }
+                }
+            }
+
+            StatsAdviceCard(uiState)
+        }
     }
 }
 
@@ -301,7 +319,10 @@ private fun TrainingFrequencyBars(
     weeklyCounts: List<WeeklyWorkoutCount>,
     modifier: Modifier = Modifier,
 ) {
-    if (weeklyCounts.isEmpty()) return
+    if (weeklyCounts.isEmpty()) {
+        EmptyChartCard(title = "训练频次", message = "暂无训练数据")
+        return
+    }
     val avg = weeklyCounts.map { it.count }.average()
 
     Card(modifier = modifier) {
@@ -344,7 +365,10 @@ private fun WorkoutDistributionChart(
     distribution: List<WorkoutTypeCount>,
     modifier: Modifier = Modifier,
 ) {
-    if (distribution.isEmpty()) return
+    if (distribution.isEmpty()) {
+        EmptyChartCard(title = "训练类型分布", message = "暂无训练数据")
+        return
+    }
     val total = distribution.sumOf { it.count }
     val colors = listOf(Color(0xFF1f6f50), Color(0xFF4e8a6c), Color(0xFFcc9a62), Color(0xFFb36a2c))
 
@@ -388,7 +412,10 @@ private fun CardioDurationChart(
     trend: List<CardioDurationPoint>,
     modifier: Modifier = Modifier,
 ) {
-    if (trend.isEmpty()) return
+    if (trend.isEmpty()) {
+        EmptyChartCard(title = "有氧时长趋势", message = "暂无有氧数据")
+        return
+    }
     val totalMinutes = trend.sumOf { it.totalMinutes }
     val days = trend.size
 
@@ -519,13 +546,11 @@ private fun EnhancedWeightTrendChart(
     modifier: Modifier = Modifier,
 ) {
     if (trend.size < 2) {
-        if (trend.isEmpty()) return
-        Card(modifier = modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("体重趋势 + 体脂", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Text("至少需要 2 条记录", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+        if (trend.isEmpty()) {
+            EmptyChartCard(title = "体重趋势 + 体脂", message = "暂无身体指标数据")
+            return
         }
+        EmptyChartCard(title = "体重趋势 + 体脂", message = "至少需要 2 条记录")
         return
     }
 
@@ -887,6 +912,65 @@ private fun SparklineLine(
             for (i in 0 until points.size - 1) {
                 drawLine(lineColor, points[i], points[i + 1], strokeWidth = 1.5f)
             }
+        }
+    }
+}
+
+// ── Skeleton / Loading States ─────────────────────────────────
+
+@Composable
+private fun ShimmerPlaceholder(
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(4.dp),
+) {
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val alpha by transition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "shimmer-alpha",
+    )
+    Box(
+        modifier = modifier.background(Color.LightGray.copy(alpha = alpha), shape),
+    )
+}
+
+@Composable
+private fun SkeletonCard(
+    modifier: Modifier = Modifier,
+    chartHeight: Int = 120,
+) {
+    Card(modifier = modifier) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ShimmerPlaceholder(
+                modifier = Modifier.fillMaxWidth(0.5f).height(14.dp),
+                shape = RoundedCornerShape(2.dp),
+            )
+            ShimmerPlaceholder(
+                modifier = Modifier.fillMaxWidth().height(chartHeight.dp),
+                shape = RoundedCornerShape(4.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun EmptyChartCard(
+    title: String,
+    message: String,
+    modifier: Modifier = Modifier,
+) {
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
