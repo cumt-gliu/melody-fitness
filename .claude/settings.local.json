@@ -19,7 +19,12 @@
       "Bash(./gradlew :app:compileDebugKotlin)",
       "Bash(./gradlew :app:compileDebugKotlin :app:compileDebugUnitTestKotlin)",
       "Bash(./gradlew :app:testDebugUnitTest)",
-      "Bash(/Users/giannis.liu/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/brainstorming/scripts/start-server.sh *)"
+      "Bash(/Users/giannis.liu/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/brainstorming/scripts/start-server.sh *)",
+      "Bash(export CI=true DEBIAN_FRONTEND=noninteractive GIT_MERGE_AUTOEDIT=no GIT_SEQUENCE_EDITOR=true EDITOR=true VISUAL=true GIT_EDITOR=true LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 LANGUAGE=en_US.UTF-8 GIT_AUTHOR_NAME=\"Giannis\" GIT_AUTHOR_EMAIL=\"giannis@example.com\" GIT_COMMITTER_NAME=\"Giannis\" GIT_COMMITTER_EMAIL=\"giannis@example.com\")",
+      "Bash(unzip -p /Users/giannis.liu/.gradle/caches/modules-2/files-2.1/com.patrykandpatrick.vico/core/2.1.0/637f8a774d6d1d1ddf97f107a89afd0159fa5619/core-2.1.0-sources.jar \"com/patrykandpatrick/vico/core/common/component/TextComponent.kt\")",
+      "Bash(git commit *)",
+      "Bash(./gradlew test *)",
+      "Bash(gh pr *)"
     ]
   }
 }
