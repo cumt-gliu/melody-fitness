@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import com.giannisliu.melodyfitness.data.repository.BodyMetricTrendPoint
 import com.giannisliu.melodyfitness.data.repository.CardioDurationPoint
 import com.giannisliu.melodyfitness.data.repository.StrengthTrendPoint
+import com.giannisliu.melodyfitness.data.repository.SparklineData
 import com.giannisliu.melodyfitness.data.repository.WeekOverWeekChanges
 import com.giannisliu.melodyfitness.data.repository.WeeklyWorkoutCount
 import com.giannisliu.melodyfitness.data.repository.WeightUnit
@@ -53,6 +54,8 @@ import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
 import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
 import com.patrykandpatrick.vico.core.cartesian.axis.HorizontalAxis
 import com.patrykandpatrick.vico.core.cartesian.axis.VerticalAxis
+
+private enum class SparklineType { BAR, LINE }
 
 @Composable
 fun StatsScreen(
@@ -79,6 +82,7 @@ fun StatsScreen(
             latestWeightKg = uiState.latestWeightKg,
             wow = uiState.weekOverWeekChanges,
             onCardClick = { onUpdateActiveTab(it) },
+            sparklineData = uiState.sparklineData,
         )
 
         TimeRangeFilter(
@@ -110,6 +114,7 @@ private fun OverviewRow(
     latestWeightKg: Float?,
     wow: WeekOverWeekChanges,
     onCardClick: (StatsTab) -> Unit,
+    sparklineData: SparklineData,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         OverviewCard(
@@ -119,6 +124,8 @@ private fun OverviewRow(
             change = wow.workoutCountChange,
             compareLabel = "vs 上周 ${wow.previousWeekWorkoutCount}",
             onClick = { onCardClick(StatsTab.TRAINING) },
+            sparklineData = sparklineData.weeklyWorkoutCounts.map { it.toFloat() },
+            sparklineType = SparklineType.BAR,
         )
         OverviewCard(
             modifier = Modifier.weight(1f),
@@ -127,6 +134,8 @@ private fun OverviewRow(
             change = wow.cardioMinutesChange,
             compareLabel = "vs 上周 ${wow.previousWeekCardioMinutes}",
             onClick = { onCardClick(StatsTab.TRAINING) },
+            sparklineData = sparklineData.weeklyCardioMinutes.map { it.toFloat() },
+            sparklineType = SparklineType.LINE,
         )
         OverviewCard(
             modifier = Modifier.weight(1f),
@@ -137,6 +146,9 @@ private fun OverviewRow(
             change = null,
             compareLabel = "较上周",
             onClick = { onCardClick(StatsTab.BODY) },
+            sparklineData = sparklineData.weeklyWeights,
+            sparklineType = SparklineType.LINE,
+            lineColor = Color(0xFFb36a2c),
         )
         OverviewCard(
             modifier = Modifier.weight(1f),
@@ -145,6 +157,8 @@ private fun OverviewRow(
             change = wow.trainingDaysChange,
             compareLabel = "vs 上周 ${wow.previousWeekTrainingDays}",
             onClick = { onCardClick(StatsTab.TRAINING) },
+            sparklineData = sparklineData.weeklyTrainingDays.map { it.toFloat() },
+            sparklineType = SparklineType.LINE,
         )
     }
 }
@@ -157,6 +171,9 @@ private fun OverviewCard(
     change: Int?,
     compareLabel: String,
     onClick: () -> Unit,
+    sparklineData: List<Float> = emptyList(),
+    sparklineType: SparklineType = SparklineType.BAR,
+    lineColor: Color = Color(0xFF1f6f50),
 ) {
     Card(
         modifier = modifier.clickable(onClick = onClick),
@@ -176,6 +193,21 @@ private fun OverviewCard(
                 }
             }
             Text(compareLabel, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+
+            // Sparkline
+            if (sparklineData.size >= 2) {
+                when (sparklineType) {
+                    SparklineType.BAR -> SparklineBar(
+                        data = sparklineData.map { it.toInt() },
+                        modifier = Modifier.fillMaxWidth().height(20.dp),
+                    )
+                    SparklineType.LINE -> SparklineLine(
+                        data = sparklineData,
+                        modifier = Modifier.fillMaxWidth().height(20.dp),
+                        lineColor = lineColor,
+                    )
+                }
+            }
         }
     }
 }
@@ -750,4 +782,50 @@ private fun getStrengthAdvice(uiState: StatsUiState): String {
         if (lastTwo[1].maxWeightKg == lastTwo[0].maxWeightKg) return "${uiState.selectedExercise} 重量保持稳定，可以考虑下一次尝试加重或加次数。"
     }
     return "继续记录力量训练，积累更多数据后会有更精准的建议。"
+}
+
+@Composable
+private fun SparklineBar(
+    data: List<Int>,
+    modifier: Modifier = Modifier,
+) {
+    if (data.size < 2) return
+    val avg = data.average()
+    val max = data.max().coerceAtLeast(1)
+    Box(modifier = modifier) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val barWidth = size.width / data.size * 0.6f
+            val gap = size.width / data.size * 0.4f
+            data.forEachIndexed { i, v ->
+                val h = (v.toFloat() / max) * size.height
+                val x = i * (barWidth + gap) + gap / 2
+                val color = if (v >= avg) Color(0xFF1f6f50) else Color(0xFFcc9a62)
+                drawRect(color, Offset(x, size.height - h), Size(barWidth, h))
+            }
+        }
+    }
+}
+
+@Composable
+private fun SparklineLine(
+    data: List<Float>,
+    modifier: Modifier = Modifier,
+    lineColor: Color = Color(0xFF1f6f50),
+) {
+    if (data.size < 2) return
+    val min = data.min()
+    val max = data.max()
+    val range = (max - min).coerceAtLeast(1f)
+    Box(modifier = modifier) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val points = data.mapIndexed { i, v ->
+                val x = (i.toFloat() / (data.size - 1)) * size.width
+                val y = ((v - min) / range) * size.height
+                Offset(x, size.height - y)
+            }
+            for (i in 0 until points.size - 1) {
+                drawLine(lineColor, points[i], points[i + 1], strokeWidth = 1.5f)
+            }
+        }
+    }
 }
