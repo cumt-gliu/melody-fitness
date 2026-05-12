@@ -18,11 +18,13 @@ import com.giannisliu.melodyfitness.data.local.entity.WorkoutLogEntity
 import com.giannisliu.melodyfitness.data.local.entity.WorkoutWithDetails
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import java.time.DayOfWeek
 import java.time.LocalDate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OfflineFitnessRepositoryTest {
@@ -185,12 +187,13 @@ class OfflineFitnessRepositoryTest {
 
     private fun createRepository(
         workoutDao: FakeWorkoutLogDao = FakeWorkoutLogDao(),
+        statsDao: FakeStatsDao = FakeStatsDao(),
     ): OfflineFitnessRepository {
         return OfflineFitnessRepository(
             workoutLogDao = workoutDao,
             bodyMetricDao = FakeBodyMetricDao(),
             goalDao = FakeGoalDao(),
-            statsDao = FakeStatsDao(),
+            statsDao = statsDao,
         )
     }
 
@@ -264,6 +267,51 @@ class OfflineFitnessRepositoryTest {
             strengthExercises = exercises,
             cardioEntries = emptyList(),
         )
+    }
+
+    private fun fakeWorkoutWithCardio(
+        id: Long,
+        dateEpochDay: Long,
+        cardioMinutes: Int,
+        activityType: String = "跑步",
+    ): WorkoutWithDetails {
+        return WorkoutWithDetails(
+            workoutLog = WorkoutLogEntity(
+                id = id, dateEpochDay = dateEpochDay,
+                title = "Cardio Workout $id", notes = "", createdAtMillis = id,
+            ),
+            strengthExercises = emptyList(),
+            cardioEntries = listOf(
+                CardioEntryEntity(
+                    id = id * 100, workoutLogId = id,
+                    activityType = activityType, durationMinutes = cardioMinutes,
+                    distanceKm = 0f, averagePace = "", notes = "",
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun observe_sparkline_data_computes_weekly_values() = runBlocking {
+        val today = LocalDate.now()
+        val thisWeekStart = today.with(DayOfWeek.MONDAY).toEpochDay()
+        val lastWeekStart = today.minusWeeks(1).with(DayOfWeek.MONDAY).toEpochDay()
+
+        val workoutDao = FakeWorkoutLogDao(
+            initialWorkouts = listOf(
+                fakeWorkoutWithCardio(id = 1L, dateEpochDay = thisWeekStart, cardioMinutes = 30),
+                fakeWorkoutWithCardio(id = 2L, dateEpochDay = lastWeekStart, cardioMinutes = 45),
+            ),
+        )
+        val statsDao = FakeStatsDao(
+            initialWorkoutDates = listOf(thisWeekStart, lastWeekStart),
+        )
+        val repository = createRepository(workoutDao = workoutDao, statsDao = statsDao)
+        val sparkline = repository.observeSparklineData().first()
+
+        assertTrue("Should have cardio minutes in at least one week", sparkline.weeklyCardioMinutes.any { it > 0 })
+        assertEquals("Should have 8 weeks of data", 8L, sparkline.weeklyWorkoutCounts.size.toLong())
+        assertTrue("Should have training days", sparkline.weeklyTrainingDays.any { it > 0 })
     }
 
     private fun fakeExercise(
@@ -372,9 +420,11 @@ private class FakeGoalDao : GoalDao {
     override suspend fun insertGoal(goal: GoalEntity) = Unit
 }
 
-private class FakeStatsDao : StatsDao {
+private class FakeStatsDao(
+    initialWorkoutDates: List<Long> = emptyList(),
+) : StatsDao {
     private val bodyMetricTrend = MutableStateFlow<List<BodyMetricTrend>>(emptyList())
-    private val workoutDates = MutableStateFlow<List<Long>>(emptyList())
+    private val workoutDates = MutableStateFlow(initialWorkoutDates)
     private val cardioByDate = MutableStateFlow<List<CardioByDate>>(emptyList())
     private val cardioDuration = MutableStateFlow<List<CardioDurationRow>>(emptyList())
     private val strengthTrend = MutableStateFlow<List<StrengthTrendRow>>(emptyList())
