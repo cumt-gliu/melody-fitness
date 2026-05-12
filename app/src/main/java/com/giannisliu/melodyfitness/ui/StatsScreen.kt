@@ -40,6 +40,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -56,10 +58,12 @@ import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLa
 import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
 import com.patrykandpatrick.vico.compose.cartesian.axis.rememberBottom
 import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStart
+import com.patrykandpatrick.vico.compose.cartesian.marker.rememberDefaultCartesianMarker
 import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
 import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
 import com.patrykandpatrick.vico.core.cartesian.axis.HorizontalAxis
 import com.patrykandpatrick.vico.core.cartesian.axis.VerticalAxis
+import com.patrykandpatrick.vico.core.common.component.TextComponent
 
 private enum class SparklineType { BAR, LINE }
 
@@ -388,27 +392,44 @@ private fun CardioDurationChart(
     val totalMinutes = trend.sumOf { it.totalMinutes }
     val days = trend.size
 
-    val modelProducer = remember { CartesianChartModelProducer() }
-
-    LaunchedEffect(trend) {
-        modelProducer.runTransaction {
-            lineSeries { series(trend.map { it.totalMinutes.toDouble() }) }
-        }
-    }
-
     Card(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text("有氧时长趋势", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
-            CartesianChartHost(
-                chart = rememberCartesianChart(
-                    rememberLineCartesianLayer(),
-                    startAxis = VerticalAxis.rememberStart(),
-                    bottomAxis = HorizontalAxis.rememberBottom(),
-                ),
-                modelProducer = modelProducer,
-                modifier = Modifier.fillMaxWidth().height(140.dp),
-            )
+            Box(modifier = Modifier.fillMaxWidth().height(140.dp)) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    if (trend.size < 2) return@Canvas
+                    val maxMin = trend.maxOf { it.totalMinutes }.coerceAtLeast(1)
+                    val points = trend.mapIndexed { i, p ->
+                        val x = (i.toFloat() / (trend.size - 1)) * size.width
+                        val y = (p.totalMinutes.toFloat() / maxMin) * size.height
+                        Offset(x, size.height - y)
+                    }
+
+                    // Gradient area fill
+                    val path = Path().apply {
+                        moveTo(points.first().x, size.height)
+                        points.forEach { lineTo(it.x, it.y) }
+                        lineTo(points.last().x, size.height)
+                        close()
+                    }
+                    drawPath(
+                        path,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFF1f6f50).copy(alpha = 0.15f),
+                                Color(0xFF1f6f50).copy(alpha = 0.02f),
+                            ),
+                            endY = size.height,
+                        ),
+                    )
+
+                    // Line
+                    for (i in 0 until points.size - 1) {
+                        drawLine(Color(0xFF1f6f50), points[i], points[i + 1], strokeWidth = 2f)
+                    }
+                }
+            }
             Text("本期累计 ${totalMinutes}分钟 · 日均 ${totalMinutes / days}分钟",
                 color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
         }
@@ -532,11 +553,13 @@ private fun EnhancedWeightTrendChart(
         Column(modifier = Modifier.padding(12.dp)) {
             Text("体重趋势 + 体脂", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
+            val marker = rememberDefaultCartesianMarker(label = TextComponent())
             CartesianChartHost(
                 chart = rememberCartesianChart(
                     rememberLineCartesianLayer(),
                     startAxis = VerticalAxis.rememberStart(),
                     bottomAxis = HorizontalAxis.rememberBottom(),
+                    marker = marker,
                 ),
                 modelProducer = modelProducer,
                 modifier = Modifier.fillMaxWidth().height(180.dp),
@@ -698,15 +721,35 @@ private fun StrengthWeightChart(
         Column(modifier = Modifier.padding(12.dp)) {
             Text("重量趋势", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
-            CartesianChartHost(
-                chart = rememberCartesianChart(
-                    rememberLineCartesianLayer(),
-                    startAxis = VerticalAxis.rememberStart(),
-                    bottomAxis = HorizontalAxis.rememberBottom(),
-                ),
-                modelProducer = modelProducer,
-                modifier = Modifier.fillMaxWidth().height(160.dp),
-            )
+            val marker = rememberDefaultCartesianMarker(label = TextComponent())
+            Box(modifier = Modifier.fillMaxWidth().height(160.dp)) {
+                CartesianChartHost(
+                    chart = rememberCartesianChart(
+                        rememberLineCartesianLayer(),
+                        startAxis = VerticalAxis.rememberStart(),
+                        bottomAxis = HorizontalAxis.rememberBottom(),
+                        marker = marker,
+                    ),
+                    modelProducer = modelProducer,
+                    modifier = Modifier.fillMaxSize(),
+                )
+
+                // PR marker overlay
+                if (prIndices.isNotEmpty() && trend.size >= 2) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val min = trend.minOf { it.maxWeightKg }
+                        val max = trend.maxOf { it.maxWeightKg }
+                        val range = (max - min).coerceAtLeast(1f)
+                        prIndices.forEach { idx ->
+                            val x = (idx.toFloat() / (trend.size - 1)) * size.width
+                            val y = ((trend[idx].maxWeightKg - min) / range) * size.height
+                            val py = size.height - y
+                            drawCircle(Color(0xFFb36a2c), radius = 5f, center = Offset(x, py))
+                            drawCircle(Color.White, radius = 2.5f, center = Offset(x, py))
+                        }
+                    }
+                }
+            }
             if (prIndices.isNotEmpty()) {
                 val prPoint = trend[prIndices.last()]
                 Text("PR ${formatFloat(prPoint.maxWeightKg)} kg", color = Color(0xFFb36a2c), style = MaterialTheme.typography.labelSmall)
