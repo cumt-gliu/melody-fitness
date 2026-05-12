@@ -179,6 +179,13 @@ data class WeeklyWorkoutCount(
     val count: Int,
 )
 
+data class SparklineData(
+    val weeklyWorkoutCounts: List<Int> = emptyList(),
+    val weeklyCardioMinutes: List<Int> = emptyList(),
+    val weeklyTrainingDays: List<Int> = emptyList(),
+    val weeklyWeights: List<Float> = emptyList(),
+)
+
 interface FitnessRepository {
     fun observeHomeSnapshot(): Flow<HomeSnapshot>
     fun observeWorkoutHistory(): Flow<List<WorkoutHistoryItem>>
@@ -187,6 +194,7 @@ interface FitnessRepository {
     fun observeStatsSnapshot(): Flow<StatsSnapshot>
     fun observeBodyMetricTrend(): Flow<List<BodyMetricTrendPoint>>
     fun observeWeeklyWorkoutCounts(weeks: Int): Flow<List<WeeklyWorkoutCount>>
+    fun observeSparklineData(): Flow<SparklineData>
     fun observeWeekOverWeekChanges(): Flow<WeekOverWeekChanges>
     fun observeCardioByDateRange(startDay: Long, endDay: Long): Flow<List<WorkoutTypeCount>>
     fun observeCardioDurationTrend(startDay: Long, endDay: Long): Flow<List<CardioDurationPoint>>

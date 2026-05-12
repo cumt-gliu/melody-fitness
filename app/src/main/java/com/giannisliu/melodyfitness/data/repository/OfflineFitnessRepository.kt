@@ -22,7 +22,6 @@ import java.util.Locale
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 class OfflineFitnessRepository(
@@ -220,20 +219,131 @@ class OfflineFitnessRepository(
         }
     }
 
+    override fun observeSparklineData(): Flow<SparklineData> {
+        val weekField = WeekFields.of(Locale.getDefault()).weekOfWeekBasedYear()
+        val today = LocalDate.now()
+        val cutoff = today.minusWeeks(8).toEpochDay()
+
+        return combine(
+            observeWeeklyWorkoutCounts(weeks = 8),
+            workoutLogDao.observeWorkoutLogs(),
+            statsDao.observeWorkoutDates(),
+            statsDao.observeBodyMetricTrend(),
+        ) { weeklyCounts, workouts, dates, bodyTrend ->
+            // weekly cardio minutes from workout logs
+            val cardioByWeek = mutableMapOf<Int, Int>()
+            workouts.filter { it.workoutLog.dateEpochDay >= cutoff }.forEach { w ->
+                if (w.cardioEntries.isNotEmpty()) {
+                    val date = LocalDate.ofEpochDay(w.workoutLog.dateEpochDay)
+                    val yw = date.year * 100 + date.get(weekField)
+                    val mins = w.cardioEntries.sumOf { it.durationMinutes }
+                    cardioByWeek[yw] = (cardioByWeek[yw] ?: 0) + mins
+                }
+            }
+
+            // weekly training days from dates
+            val daysByWeek = mutableMapOf<Int, MutableSet<Long>>()
+            dates.filter { it >= cutoff }.forEach { day ->
+                val yw = LocalDate.ofEpochDay(day).let { it.year * 100 + it.get(weekField) }
+                daysByWeek.getOrPut(yw) { mutableSetOf() }.add(day)
+            }
+
+            // weekly weights (latest per week) from body trend
+            val weightByWeek = mutableMapOf<Int, Float>()
+            bodyTrend.filter { it.dateEpochDay >= cutoff }.forEach { point ->
+                val yw = LocalDate.ofEpochDay(point.dateEpochDay).let {
+                    it.year * 100 + it.get(weekField)
+                }
+                weightByWeek[yw] = point.weightKg
+            }
+
+            // align to 8-week window
+            val weeks = (0 until 8).map { weekAgo ->
+                today.minusWeeks(weekAgo.toLong()).let {
+                    it.year * 100 + it.get(weekField)
+                }
+            }.reversed()
+
+            SparklineData(
+                weeklyWorkoutCounts = weeklyCounts.map { it.count },
+                weeklyCardioMinutes = weeks.map { cardioByWeek[it] ?: 0 },
+                weeklyTrainingDays = weeks.map { daysByWeek[it]?.size ?: 0 },
+                weeklyWeights = weeks.mapNotNull { weightByWeek[it] },
+            )
+        }
+    }
+
     override fun observeWeekOverWeekChanges(): Flow<WeekOverWeekChanges> {
-        return flowOf(WeekOverWeekChanges())
+        val today = LocalDate.now()
+        val thisWeekStart = today.with(DayOfWeek.MONDAY).toEpochDay()
+        val lastWeekStart = today.minusWeeks(1).with(DayOfWeek.MONDAY).toEpochDay()
+        val lastWeekEnd = thisWeekStart - 1
+        val todayEpochDay = today.toEpochDay()
+
+        val thisWeek = combine(
+            workoutLogDao.observeWorkoutCountSince(thisWeekStart),
+            statsDao.observeCardioMinutesBetween(thisWeekStart, todayEpochDay),
+            workoutLogDao.observeTrainingDaysBetween(thisWeekStart, todayEpochDay),
+        ) { wc, cm, td -> Triple(wc, cm, td) }
+
+        val lastWeek = combine(
+            workoutLogDao.observeWorkoutCountBetween(lastWeekStart, lastWeekEnd),
+            statsDao.observeCardioMinutesBetween(lastWeekStart, lastWeekEnd),
+            workoutLogDao.observeTrainingDaysBetween(lastWeekStart, lastWeekEnd),
+        ) { wc, cm, td -> Triple(wc, cm, td) }
+
+        return combine(thisWeek, lastWeek) { tw, lw ->
+            WeekOverWeekChanges(
+                workoutCountChange = tw.first - lw.first,
+                previousWeekWorkoutCount = lw.first,
+                cardioMinutesChange = tw.second - lw.second,
+                previousWeekCardioMinutes = lw.second,
+                trainingDaysChange = tw.third - lw.third,
+                previousWeekTrainingDays = lw.third,
+            )
+        }
     }
 
     override fun observeCardioByDateRange(startDay: Long, endDay: Long): Flow<List<WorkoutTypeCount>> {
-        return flowOf(emptyList())
+        return combine(
+            statsDao.observeCardioByDateRange(startDay, endDay),
+            workoutLogDao.observeWorkoutLogs(),
+        ) { cardioRows, workouts ->
+            val filteredWorkouts = workouts.filter { w ->
+                w.workoutLog.dateEpochDay in startDay..endDay
+            }
+            val strengthCount = filteredWorkouts.count { it.strengthExercises.isNotEmpty() }
+            val cardioTypeCounts = cardioRows
+                .groupBy { it.activityType }
+                .mapValues { it.value.size }
+
+            val list = mutableListOf<WorkoutTypeCount>()
+            if (strengthCount > 0) list.add(WorkoutTypeCount("力量", strengthCount))
+            cardioTypeCounts.forEach { (type, count) ->
+                list.add(WorkoutTypeCount(type, count))
+            }
+            list
+        }
     }
 
     override fun observeCardioDurationTrend(startDay: Long, endDay: Long): Flow<List<CardioDurationPoint>> {
-        return flowOf(emptyList())
+        return statsDao.observeCardioDurationTrend(startDay, endDay).map { rows ->
+            rows.map { CardioDurationPoint(it.dateEpochDay, it.totalMinutes) }
+        }
     }
 
     override fun observeStrengthTrend(startDay: Long, endDay: Long): Flow<Map<String, List<StrengthTrendPoint>>> {
-        return flowOf(emptyMap())
+        return statsDao.observeStrengthTrend(startDay, endDay).map { rows ->
+            rows.groupBy { it.exerciseName }.mapValues { entry ->
+                entry.value.map {
+                    StrengthTrendPoint(
+                        dateEpochDay = it.dateEpochDay,
+                        maxWeightKg = it.maxWeight,
+                        volumeKg = it.volume,
+                    )
+                }
+            }
+        }
     }
 
     override suspend fun saveStrengthWorkout(input: StrengthWorkoutInput) {
