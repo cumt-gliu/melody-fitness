@@ -88,59 +88,78 @@ fun StatsScreen(
         modifier = Modifier
             .fillMaxSize()
             .padding(paddingValues)
-            .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         SectionTitle(title = "训练统计")
 
         if (!uiState.isReady) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                repeat(4) {
-                    SkeletonCard(modifier = Modifier.weight(1f), chartHeight = 20)
-                }
-            }
-            SkeletonCard(chartHeight = 60)
-            SkeletonCard(chartHeight = 80)
-        } else {
-            OverviewRow(
-                weeklyWorkoutCount = uiState.weeklyWorkoutCount,
-                totalCardioMinutes = uiState.totalCardioMinutes,
-                latestWeightKg = uiState.latestWeightKg,
-                wow = uiState.weekOverWeekChanges,
-                onCardClick = { onUpdateActiveTab(it) },
-                sparklineData = uiState.sparklineData,
-            )
-
-            TimeRangeFilter(
-                selected = uiState.selectedTimeRange,
-                onSelect = onUpdateTimeRange,
-            )
-
-            StatsTabRow(
-                selected = uiState.activeTab,
-                onSelect = onUpdateActiveTab,
-            )
-
-            Crossfade(
-                targetState = uiState.selectedTimeRange,
-                animationSpec = tween(300),
-                label = "range-crossfade",
+            // Loading skeleton (scrollable to avoid overflow)
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                AnimatedContent(
-                    targetState = uiState.activeTab,
-                    transitionSpec = { fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300)) },
-                    label = "tab-content",
-                ) { tab ->
-                    when (tab) {
-                        StatsTab.TRAINING -> TrainingAnalysisTab(uiState)
-                        StatsTab.BODY -> BodyMetricsTab(uiState, weightUnit)
-                        StatsTab.STRENGTH -> StrengthProgressTab(uiState, onSelectExercise)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    repeat(4) {
+                        SkeletonCard(modifier = Modifier.weight(1f), chartHeight = 20)
                     }
                 }
+                SkeletonCard(chartHeight = 60)
+                SkeletonCard(chartHeight = 80)
+            }
+        } else {
+            // Fixed header section (does NOT scroll)
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                OverviewRow(
+                    weeklyWorkoutCount = uiState.weeklyWorkoutCount,
+                    totalCardioMinutes = uiState.totalCardioMinutes,
+                    latestWeightKg = uiState.latestWeightKg,
+                    wow = uiState.weekOverWeekChanges,
+                    onCardClick = { onUpdateActiveTab(it) },
+                    sparklineData = uiState.sparklineData,
+                )
+
+                TimeRangeFilter(
+                    selected = uiState.selectedTimeRange,
+                    onSelect = onUpdateTimeRange,
+                )
+
+                StatsTabRow(
+                    selected = uiState.activeTab,
+                    onSelect = onUpdateActiveTab,
+                )
             }
 
-            StatsAdviceCard(uiState)
+            Spacer(Modifier.height(12.dp))
+
+            // Scrollable content section
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Crossfade(
+                    targetState = uiState.selectedTimeRange,
+                    animationSpec = tween(300),
+                    label = "range-crossfade",
+                ) {
+                    AnimatedContent(
+                        targetState = uiState.activeTab,
+                        transitionSpec = { fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300)) },
+                        label = "tab-content",
+                    ) { tab ->
+                        when (tab) {
+                            StatsTab.TRAINING -> TrainingAnalysisTab(uiState)
+                            StatsTab.BODY -> BodyMetricsTab(uiState, weightUnit)
+                            StatsTab.STRENGTH -> StrengthProgressTab(uiState, onSelectExercise)
+                        }
+                    }
+                }
+
+                StatsAdviceCard(uiState)
+            }
         }
     }
 }
