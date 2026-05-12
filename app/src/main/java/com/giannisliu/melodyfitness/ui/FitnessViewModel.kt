@@ -15,6 +15,7 @@ import com.giannisliu.melodyfitness.data.repository.HomeSnapshot
 import com.giannisliu.melodyfitness.data.repository.StatsSnapshot
 import com.giannisliu.melodyfitness.data.repository.StrengthExerciseTemplate
 import com.giannisliu.melodyfitness.data.repository.StrengthTrendPoint
+import com.giannisliu.melodyfitness.data.repository.SparklineData
 import com.giannisliu.melodyfitness.data.repository.StrengthWorkoutInput
 import com.giannisliu.melodyfitness.data.repository.WeekOverWeekChanges
 import com.giannisliu.melodyfitness.data.repository.WeeklyWorkoutCount
@@ -106,6 +107,9 @@ data class StatsUiState(
     val strengthExerciseTrends: Map<String, List<StrengthTrendPoint>> = emptyMap(),
     val strengthExerciseNames: List<String> = emptyList(),
     val selectedExercise: String = "",
+    // Visual polish
+    val sparklineData: SparklineData = SparklineData(),
+    val isReady: Boolean = false,
 )
 
 class FitnessViewModel(
@@ -193,12 +197,16 @@ class FitnessViewModel(
             repository.observeStrengthTrend(start, end)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
+    private val sparklineData: StateFlow<SparklineData> = repository.observeSparklineData()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SparklineData())
+
     val statsUiState: StateFlow<StatsUiState> = combine(
         statsMeta,
         tabTrainingData,
         tabStrengthData,
         selectedExercise,
-    ) { meta, trainingData, strengthMap, selEx ->
+        sparklineData,
+    ) { meta, trainingData, strengthMap, selEx, spark ->
         val base = meta.snapshot.toUiState()
         val exerciseNames = strengthMap.keys.toList()
         val effectiveExercise = if (selEx.isBlank() && exerciseNames.isNotEmpty())
@@ -214,6 +222,8 @@ class FitnessViewModel(
             strengthExerciseTrends = strengthMap,
             strengthExerciseNames = exerciseNames,
             selectedExercise = effectiveExercise,
+            sparklineData = spark,
+            isReady = true,
         )
     }.stateIn(
         scope = viewModelScope,
