@@ -1,0 +1,26 @@
+<h2>时间范围怎么选？</h2>
+<p class="subtitle">对比和趋势需要时间维度，你希望怎么切分？</p>
+
+<div class="options">
+  <div class="option" data-choice="filter" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>顶部时间筛选器</h3>
+      <p>页面顶部放一个筛选条：「本周｜本月｜本季度｜今年｜自定义」，选中后整个页面的指标和图表联动刷新</p>
+    </div>
+  </div>
+  <div class="option" data-choice="fix-week" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>固定本周 + 趋势延伸</h3>
+      <p>默认本周对比数据，图表展示更长周期（近 30 天 / 近 12 周），不切分整体页面</p>
+    </div>
+  </div>
+  <div class="option" data-choice="both" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>筛选器 + 固定概览</h3>
+      <p>顶部概览行（本周数据）不受筛选影响，下面的详细区域按选择的周期联动</p>
+    </div>
+  </div>
+</div>

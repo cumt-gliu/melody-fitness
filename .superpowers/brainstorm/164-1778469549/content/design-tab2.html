@@ -1,0 +1,82 @@
+<h2>Tab 2：身体指标</h2>
+<p class="subtitle">受时间筛选器控制，展示多维度身体数据趋势</p>
+
+<div class="mockup">
+  <div class="mockup-body" style="padding:20px;display:flex;flex-direction:column;gap:16px">
+
+    <!-- 顶部：周期对比卡片行 -->
+    <div style="display:flex;gap:12px">
+      <div style="flex:1;background:#fffbf4;border-radius:12px;padding:12px;border:1px solid #e8e0d4;text-align:center">
+        <div style="font-size:11px;color:#8b8b8b">体重</div>
+        <div style="font-size:20px;font-weight:bold;color:#1f6f50">72.4</div>
+        <div style="font-size:11px"><span style="color:#1f6f50">▼ -0.8</span> vs 上期</div>
+      </div>
+      <div style="flex:1;background:#fffbf4;border-radius:12px;padding:12px;border:1px solid #e8e0d4;text-align:center">
+        <div style="font-size:11px;color:#8b8b8b">体脂</div>
+        <div style="font-size:20px;font-weight:bold;color:#1f6f50">15.2%</div>
+        <div style="font-size:11px"><span style="color:#1f6f50">▼ -0.5%</span> vs 上期</div>
+      </div>
+      <div style="flex:1;background:#fffbf4;border-radius:12px;padding:12px;border:1px solid #e8e0d4;text-align:center">
+        <div style="font-size:11px;color:#8b8b8b">腰围</div>
+        <div style="font-size:20px;font-weight:bold;color:#1f6f50">78 cm</div>
+        <div style="font-size:11px"><span style="color:#1f6f50">▼ -2 cm</span> vs 上期</div>
+      </div>
+      <div style="flex:1;background:#fffbf4;border-radius:12px;padding:12px;border:1px solid #e8e0d4;text-align:center">
+        <div style="font-size:11px;color:#8b8b8b">睡眠</div>
+        <div style="font-size:20px;font-weight:bold;color:#b36a2c">6.8 h</div>
+        <div style="font-size:11px"><span style="color:#b36a2c">▲ +0.3</span> vs 上期</div>
+      </div>
+      <div style="flex:1;background:#fffbf4;border-radius:12px;padding:12px;border:1px solid #e8e0d4;text-align:center">
+        <div style="font-size:11px;color:#8b8b8b">疲劳</div>
+        <div style="font-size:20px;font-weight:bold;color:#cc9a62">7/10</div>
+        <div style="font-size:11px"><span style="color:#1f6f50">▼ -1</span> vs 上期</div>
+      </div>
+    </div>
+
+    <!-- 体重趋势 + 体脂叠加 -->
+    <div style="background:#fffbf4;border-radius:12px;padding:14px;border:1px solid #e8e0d4">
+      <div style="font-size:14px;font-weight:600;margin-bottom:8px">📈 体重趋势 + 体脂</div>
+      <svg width="100%" height="120" viewBox="0 0 500 120">
+        <!-- Weight line -->
+        <polyline points="30,70 80,60 130,65 180,55 230,58 280,45 330,50 380,40 430,42" fill="none" stroke="#1f6f50" stroke-width="2.5"/>
+        <!-- Body fat line -->
+        <polyline points="30,40 80,38 130,42 180,35 230,37 280,30 330,32 380,28 430,30" fill="none" stroke="#b36a2c" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <!-- Target line -->
+        <line x1="0" y1="50" x2="500" y2="50" stroke="#b36a2c" stroke-width="1" stroke-dasharray="6,3"/>
+        <text x="410" y="48" fill="#b36a2c" font-size="8">目标 72kg</text>
+        <!-- Legend -->
+        <text x="30" y="115" fill="#1f6f50" font-size="9">● 体重</text>
+        <text x="100" y="115" fill="#b36a2c" font-size="9">- - 体脂</text>
+        <text x="170" y="115" fill="#b36a2c" font-size="9">- - 目标线</text>
+      </svg>
+    </div>
+
+    <!-- 下方三个小趋势图 -->
+    <div style="display:flex;gap:12px">
+      <div style="flex:1;background:#fffbf4;border-radius:12px;padding:12px;border:1px solid #e8e0d4">
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px">📏 腰围趋势</div>
+        <svg width="100%" height="50" viewBox="0 0 160 50">
+          <polyline points="10,35 30,30 50,32 70,25 90,28 110,20 130,22 150,18" fill="none" stroke="#4e8a6c" stroke-width="2"/>
+        </svg>
+      </div>
+      <div style="flex:1;background:#fffbf4;border-radius:12px;padding:12px;border:1px solid #e8e0d4">
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px">😴 睡眠趋势</div>
+        <svg width="100%" height="50" viewBox="0 0 160 50">
+          <polyline points="10,20 30,25 50,22 70,30 90,25 110,35 130,28 150,32" fill="none" stroke="#cc9a62" stroke-width="2"/>
+          <line x1="0" y1="28" x2="160" y2="28" stroke="#b36a2c" stroke-width="1" stroke-dasharray="3,3"/>
+        </svg>
+      </div>
+      <div style="flex:1;background:#fffbf4;border-radius:12px;padding:12px;border:1px solid #e8e0d4">
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px">⚡ 疲劳趋势</div>
+        <svg width="100%" height="50" viewBox="0 0 160 50">
+          <polyline points="10,15 30,18 50,22 70,20 90,25 110,30 130,28 150,35" fill="none" stroke="#cc9a62" stroke-width="2"/>
+        </svg>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<p><strong>数据说明：</strong>所有数据已存在于 <code>body_metrics</code> 表中，无需新增 DAO。图表复用现有 Vico 组件，增加组合图（主坐标轴体重 + 次坐标轴体脂）和周期对比逻辑。</p>
+
+<p>这个 Tab 的内容设计如何？</p>

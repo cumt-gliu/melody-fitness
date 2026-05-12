@@ -1,0 +1,45 @@
+<h2>方向 4：骨架屏 / 加载态 / 空状态</h2>
+<p class="subtitle">当前多个图表在无数据时直接 return，用户看不到任何反馈</p>
+
+<div class="section">
+  <h3>当前问题</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;">
+    <tr><th style="text-align:left;padding:4px;border-bottom:1px solid #e8e0d4;">组件</th><th style="text-align:left;padding:4px;border-bottom:1px solid #e8e0d4;">当前行为</th><th style="text-align:left;padding:4px;border-bottom:1px solid #e8e0d4;">改进</th></tr>
+    <tr><td style="padding:4px;border-bottom:1px solid #eee;">训练频次柱状图</td><td style="padding:4px;border-bottom:1px solid #eee;color:#c0392b;">直接 return</td><td style="padding:4px;border-bottom:1px solid #eee;">骨架屏 + "暂无训练数据"</td></tr>
+    <tr><td style="padding:4px;border-bottom:1px solid #eee;">类型分布环形图</td><td style="padding:4px;border-bottom:1px solid #eee;color:#c0392b;">直接 return</td><td style="padding:4px;border-bottom:1px solid #eee;">骨架屏 + "暂无训练数据"</td></tr>
+    <tr><td style="padding:4px;border-bottom:1px solid #eee;">有氧时长趋势</td><td style="padding:4px;border-bottom:1px solid #eee;color:#c0392b;">直接 return</td><td style="padding:4px;border-bottom:1px solid #eee;">骨架屏 + "暂无有氧数据"</td></tr>
+    <tr><td style="padding:4px;border-bottom:1px solid #eee;">体重趋势图</td><td style="padding:4px;border-bottom:1px solid #eee;">显示 "至少需要 2 条记录"</td><td style="padding:4px;border-bottom:1px solid #eee;">保留，改为更友好的卡片样式</td></tr>
+    <tr><td style="padding:4px;border-bottom:1px solid #eee;">迷你趋势图</td><td style="padding:4px;border-bottom:1px solid #eee;">显示 "数据不足"</td><td style="padding:4px;border-bottom:1px solid #eee;">保留，改为灰色占位框</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>骨架屏样式</h3>
+  <p>使用 Compose shimmer 效果（渐变色动画），轻量手写，无需额外库。</p>
+  <div style="display:flex;gap:12px;margin-top:8px;">
+    <div style="flex:1;background:#f7f2e8;border-radius:8px;padding:12px;">
+      <div style="height:12px;width:60%;background:linear-gradient(90deg,#e8e0d4,#f0e8dc,#e8e0d4);border-radius:4px;margin-bottom:8px;animation:shimmer 1.5s infinite;"></div>
+      <div style="height:80px;background:linear-gradient(90deg,#e8e0d4,#f0e8dc,#e8e0d4);border-radius:4px;animation:shimmer 1.5s infinite 0.3s;"></div>
+    </div>
+    <div style="flex:1;background:#f7f2e8;border-radius:8px;padding:12px;">
+      <div style="height:12px;width:50%;background:linear-gradient(90deg,#e8e0d4,#f0e8dc,#e8e0d4);border-radius:4px;margin-bottom:8px;animation:shimmer 1.5s infinite 0.15s;"></div>
+      <div style="height:80px;background:linear-gradient(90deg,#e8e0d4,#f0e8dc,#e8e0d4);border-radius:4px;animation:shimmer 1.5s infinite 0.45s;"></div>
+    </div>
+  </div>
+  <div style="margin-top:8px;padding:8px;background:#fffbf4;border:1px solid #e8e0d4;border-radius:4px;font-size:12px;color:#666;">
+    动画效果：<code>@keyframes shimmer { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }</code>
+  </div>
+</div>
+
+<div class="section">
+  <h3>加载状态检测</h3>
+  <p>StatsUiState 新增字段：</p>
+  <pre style="background:#f7f2e8;padding:8px;border-radius:4px;font-size:12px;">
+data class StatsUiState(
+    // ... 现有字段
+    val isOverviewReady: Boolean = false,  // 概览数据是否已加载
+    val isTabDataReady: Boolean = false,   // Tab 数据是否已加载
+)
+  </pre>
+  <p>首次加载时显示骨架屏，后续数据刷新时数据内容原地过渡。</p>
+</div>

@@ -5,20 +5,30 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.giannisliu.melodyfitness.data.repository.BodyMetricSummary
 import com.giannisliu.melodyfitness.data.repository.BodyMetricInput
+import com.giannisliu.melodyfitness.data.repository.BodyMetricTrendPoint
+import com.giannisliu.melodyfitness.data.repository.CardioDurationPoint
+import com.giannisliu.melodyfitness.data.repository.CardioWorkoutInput
 import com.giannisliu.melodyfitness.data.repository.FitnessRepository
 import com.giannisliu.melodyfitness.data.repository.GoalInput
 import com.giannisliu.melodyfitness.data.repository.GoalSummary
 import com.giannisliu.melodyfitness.data.repository.HomeSnapshot
 import com.giannisliu.melodyfitness.data.repository.StatsSnapshot
-import com.giannisliu.melodyfitness.data.repository.StrengthWorkoutInput
-import com.giannisliu.melodyfitness.data.repository.CardioWorkoutInput
 import com.giannisliu.melodyfitness.data.repository.StrengthExerciseTemplate
+import com.giannisliu.melodyfitness.data.repository.StrengthTrendPoint
+import com.giannisliu.melodyfitness.data.repository.StrengthWorkoutInput
+import com.giannisliu.melodyfitness.data.repository.WeekOverWeekChanges
+import com.giannisliu.melodyfitness.data.repository.WeeklyWorkoutCount
 import com.giannisliu.melodyfitness.data.repository.WeightUnit
 import com.giannisliu.melodyfitness.data.repository.WorkoutHistoryItem
 import com.giannisliu.melodyfitness.data.repository.WorkoutSummary
+import com.giannisliu.melodyfitness.data.repository.WorkoutTypeCount
 import com.giannisliu.melodyfitness.data.settings.SettingsRepository
+import java.time.LocalDate
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -46,7 +56,32 @@ data class SettingsUiState(
     val weightUnit: WeightUnit = WeightUnit.KG,
 )
 
+enum class TimeRange(val label: String) {
+    THIS_WEEK("本周"),
+    THIS_MONTH("本月"),
+    THIS_QUARTER("本季度"),
+    THIS_YEAR("今年"),
+}
+
+fun TimeRange.toDateRange(): Pair<Long, Long> {
+    val now = LocalDate.now()
+    val start = when (this) {
+        TimeRange.THIS_WEEK -> now.with(java.time.DayOfWeek.MONDAY)
+        TimeRange.THIS_MONTH -> now.withDayOfMonth(1)
+        TimeRange.THIS_QUARTER -> now.with(now.month.firstMonthOfQuarter()).withDayOfMonth(1)
+        TimeRange.THIS_YEAR -> now.withDayOfYear(1)
+    }
+    return start.toEpochDay() to now.toEpochDay()
+}
+
+enum class StatsTab(val label: String) {
+    TRAINING("训练分析"),
+    BODY("身体指标"),
+    STRENGTH("力量进步"),
+}
+
 data class StatsUiState(
+    // Overview
     val weeklyWorkoutCount: Int = 0,
     val totalCardioMinutes: Int = 0,
     val totalCardioDistanceKm: Float = 0f,
@@ -57,6 +92,20 @@ data class StatsUiState(
     val latestWaistCm: Float? = null,
     val latestSleepHours: Float? = null,
     val latestFatigueScore: Int? = null,
+    // Overview (new)
+    val weekOverWeekChanges: WeekOverWeekChanges = WeekOverWeekChanges(),
+    val bodyMetricTrend: List<BodyMetricTrendPoint> = emptyList(),
+    val weeklyWorkoutCounts: List<WeeklyWorkoutCount> = emptyList(),
+    // Tab state
+    val selectedTimeRange: TimeRange = TimeRange.THIS_WEEK,
+    val activeTab: StatsTab = StatsTab.TRAINING,
+    // Tab 1: Training analysis
+    val workoutTypeDistribution: List<WorkoutTypeCount> = emptyList(),
+    val cardioDurationTrend: List<CardioDurationPoint> = emptyList(),
+    // Tab 3: Strength progress
+    val strengthExerciseTrends: Map<String, List<StrengthTrendPoint>> = emptyMap(),
+    val strengthExerciseNames: List<String> = emptyList(),
+    val selectedExercise: String = "",
 )
 
 class FitnessViewModel(
@@ -95,13 +144,94 @@ class FitnessViewModel(
             initialValue = RecordUiState(),
         )
 
-    val statsUiState: StateFlow<StatsUiState> = repository.observeStatsSnapshot()
-        .map(StatsSnapshot::toUiState)
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = StatsUiState(),
+    private val selectedTimeRange = MutableStateFlow(TimeRange.THIS_WEEK)
+    private val activeTab = MutableStateFlow(StatsTab.TRAINING)
+    private val selectedExercise = MutableStateFlow("")
+
+    // Intermediate container to avoid >5 typed combine params
+    private data class StatsMeta(
+        val snapshot: StatsSnapshot = StatsSnapshot(0, 0, 0f, 0f, null, null, null, null, null, null),
+        val wow: WeekOverWeekChanges = WeekOverWeekChanges(),
+        val bodyTrend: List<BodyMetricTrendPoint> = emptyList(),
+        val timeRange: TimeRange = TimeRange.THIS_WEEK,
+        val tab: StatsTab = StatsTab.TRAINING,
+    )
+
+    private val statsMeta: StateFlow<StatsMeta> = combine(
+        repository.observeStatsSnapshot(),
+        repository.observeWeekOverWeekChanges(),
+        repository.observeBodyMetricTrend(),
+        selectedTimeRange,
+        activeTab,
+    ) { snapshot, wow, bodyTrend, range, tab ->
+        StatsMeta(snapshot, wow, bodyTrend, range, tab)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StatsMeta())
+
+    // Tab 1: training analysis data
+    private data class TabTrainingData(
+        val distribution: List<WorkoutTypeCount> = emptyList(),
+        val cardioTrend: List<CardioDurationPoint> = emptyList(),
+        val weeklyCounts: List<WeeklyWorkoutCount> = emptyList(),
+    )
+
+    private val tabTrainingData: StateFlow<TabTrainingData> = selectedTimeRange
+        .flatMapLatest { range ->
+            val (start, end) = range.toDateRange()
+            combine(
+                repository.observeCardioByDateRange(start, end),
+                repository.observeCardioDurationTrend(start, end),
+                repository.observeWeeklyWorkoutCounts(weeks = 8),
+            ) { distribution, cardioTrend, weeklyCounts ->
+                TabTrainingData(distribution, cardioTrend, weeklyCounts)
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TabTrainingData())
+
+    // Tab 3: strength data
+    private val tabStrengthData: StateFlow<Map<String, List<StrengthTrendPoint>>> = selectedTimeRange
+        .flatMapLatest { range ->
+            val (start, end) = range.toDateRange()
+            repository.observeStrengthTrend(start, end)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    val statsUiState: StateFlow<StatsUiState> = combine(
+        statsMeta,
+        tabTrainingData,
+        tabStrengthData,
+        selectedExercise,
+    ) { meta, trainingData, strengthMap, selEx ->
+        val base = meta.snapshot.toUiState()
+        val exerciseNames = strengthMap.keys.toList()
+        val effectiveExercise = if (selEx.isBlank() && exerciseNames.isNotEmpty())
+            exerciseNames.first() else selEx
+        base.copy(
+            weekOverWeekChanges = meta.wow,
+            selectedTimeRange = meta.timeRange,
+            activeTab = meta.tab,
+            bodyMetricTrend = meta.bodyTrend,
+            workoutTypeDistribution = trainingData.distribution,
+            cardioDurationTrend = trainingData.cardioTrend,
+            weeklyWorkoutCounts = trainingData.weeklyCounts,
+            strengthExerciseTrends = strengthMap,
+            strengthExerciseNames = exerciseNames,
+            selectedExercise = effectiveExercise,
         )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = StatsUiState(),
+    )
+
+    fun updateTimeRange(range: TimeRange) {
+        selectedTimeRange.value = range
+    }
+
+    fun updateActiveTab(tab: StatsTab) {
+        activeTab.value = tab
+    }
+
+    fun selectExercise(name: String) {
+        selectedExercise.value = name
+    }
 
     val settingsUiState: StateFlow<SettingsUiState> = settingsRepository.observeWeightUnit()
         .map { SettingsUiState(weightUnit = it) }

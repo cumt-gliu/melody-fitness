@@ -1,0 +1,47 @@
+<h2>方向 3：图表视觉增强</h2>
+<p class="subtitle">三处增强，让图表信息更丰富</p>
+
+<div class="section" style="border:1px solid #e8e0d4;border-radius:8px;padding:16px;margin-bottom:16px;">
+  <h3>① 有氧趋势面积渐变填充</h3>
+  <p>当前为纯折线，增加从主色到透明的渐变填充，视觉上更饱满。</p>
+  <div style="background:#f7f2e8;border-radius:4px;padding:12px;margin-top:8px;">
+    <div style="height:60px;position:relative;">
+      <svg width="100%" height="60" viewBox="0 0 200 60" preserveAspectRatio="none">
+        <defs><linearGradient id="grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1f6f50" stop-opacity="0.3"/><stop offset="100%" stop-color="#1f6f50" stop-opacity="0.02"/></linearGradient></defs>
+        <path d="M0,50 Q25,40 50,35 Q75,20 100,25 Q125,15 150,18 Q175,8 200,10 L200,60 L0,60 Z" fill="url(#grad)"/>
+        <polyline points="0,50 25,40 50,35 75,20 100,25 125,15 150,18 175,8 200,10" fill="none" stroke="#1f6f50" stroke-width="2"/>
+      </svg>
+    </div>
+  </div>
+  <p style="margin-top:8px;font-size:13px;color:#666;">实现：Vico <code>rememberLineCartesianLayer(areaFill = ...)</code> 或 Canvas 手绘</p>
+</div>
+
+<div class="section" style="border:1px solid #e8e0d4;border-radius:8px;padding:16px;margin-bottom:16px;">
+  <h3>② 力量重量 PR 标记点</h3>
+  <p>当前只在底部文字标注 PR 值，改为在图表折线上标记橙色圆点 + 标签。</p>
+  <div style="background:#f7f2e8;border-radius:4px;padding:12px;margin-top:8px;">
+    <div style="height:60px;position:relative;">
+      <svg width="100%" height="60" viewBox="0 0 200 60" preserveAspectRatio="none">
+        <polyline points="0,50 25,45 50,30 75,35 100,20 125,25 150,10 175,15 200,12" fill="none" stroke="#1f6f50" stroke-width="2"/>
+        <circle cx="50" cy="30" r="4" fill="#b36a2c"/>
+        <circle cx="100" cy="20" r="4" fill="#b36a2c"/>
+        <circle cx="150" cy="10" r="4" fill="#b36a2c"/>
+        <text x="48" y="26" font-size="6" fill="#b36a2c">PR</text>
+        <text x="98" y="16" font-size="6" fill="#b36a2c">PR</text>
+        <text x="148" y="6" font-size="6" fill="#b36a2c">PR</text>
+      </svg>
+    </div>
+  </div>
+  <p style="margin-top:8px;font-size:13px;color:#666;">实现：Canvas 叠加绘制标记点，非 Vico 原生</p>
+</div>
+
+<div class="section" style="border:1px solid #e8e0d4;border-radius:8px;padding:16px;margin-bottom:16px;">
+  <h3>③ Tooltip 数据点提示</h3>
+  <p>触摸/点击折线图数据点，弹出日期 + 数值提示框。以下图表受益：</p>
+  <ul>
+    <li>有氧时长趋势 → "5/10 · 35 分钟"</li>
+    <li>体重+体脂叠加图 → "5/10 · 72.3 kg · 15%"</li>
+    <li>力量重量趋势 → "5/10 · 60 kg"</li>
+  </ul>
+  <p style="margin-top:8px;font-size:13px;color:#666;">实现：Vico 内置 <code>rememberCartesianChart(marker = rememberMarker())</code></p>
+</div>

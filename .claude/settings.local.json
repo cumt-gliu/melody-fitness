@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git init *)",
+      "Bash(git branch *)",
+      "Read(//private/tmp/**)",
+      "Bash(unzip -p ~/.gradle/caches/modules-2/files-2.1/com.patrykandpatrick.vico/compose/2.1.0/b967da7cd8078b9d71e089dd7dec7d570097e1e6/compose-2.1.0.aar classes.jar)",
+      "Bash(jar tf *)",
+      "Bash(javap -public /tmp/classes.jar)",
+      "Bash(jar xf *)",
+      "Bash(javap -public com/patrykandpatrick/vico/compose/cartesian/axis/HorizontalAxisKt.class)",
+      "Bash(javap -public com/patrykandpatrick/vico/compose/cartesian/CartesianChartModelProducerKt.class)",
+      "Bash(git push *)",
+      "Bash(bash *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(./gradlew :app:assembleDebug)",
+      "Bash(./gradlew :app:compileDebugUnitTestKotlin)",
+      "Bash(./gradlew :app:compileDebugKotlin)",
+      "Bash(./gradlew :app:compileDebugKotlin :app:compileDebugUnitTestKotlin)",
+      "Bash(./gradlew :app:testDebugUnitTest)",
+      "Bash(/Users/giannis.liu/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/brainstorming/scripts/start-server.sh *)"
+    ]
+  }
+}

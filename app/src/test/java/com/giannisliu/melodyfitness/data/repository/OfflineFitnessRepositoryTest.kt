@@ -1,8 +1,12 @@
 package com.giannisliu.melodyfitness.data.repository
 
 import com.giannisliu.melodyfitness.data.local.dao.BodyMetricDao
+import com.giannisliu.melodyfitness.data.local.dao.BodyMetricTrend
+import com.giannisliu.melodyfitness.data.local.dao.CardioByDate
+import com.giannisliu.melodyfitness.data.local.dao.CardioDurationRow
 import com.giannisliu.melodyfitness.data.local.dao.GoalDao
 import com.giannisliu.melodyfitness.data.local.dao.StatsDao
+import com.giannisliu.melodyfitness.data.local.dao.StrengthTrendRow
 import com.giannisliu.melodyfitness.data.local.dao.WorkoutLogDao
 import com.giannisliu.melodyfitness.data.local.entity.BodyMetricEntity
 import com.giannisliu.melodyfitness.data.local.entity.CardioEntryEntity
@@ -14,6 +18,7 @@ import com.giannisliu.melodyfitness.data.local.entity.WorkoutLogEntity
 import com.giannisliu.melodyfitness.data.local.entity.WorkoutWithDetails
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import java.time.LocalDate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
@@ -189,10 +194,55 @@ class OfflineFitnessRepositoryTest {
         )
     }
 
+    @Test
+    fun observe_week_over_week_changes_computes_deltas() = runBlocking {
+        val today = LocalDate.now()
+        val thisWeekStart = today.with(java.time.DayOfWeek.MONDAY).toEpochDay()
+        val lastWeekStart = today.minusWeeks(1).with(java.time.DayOfWeek.MONDAY).toEpochDay()
+
+        val workoutDao = FakeWorkoutLogDao(
+            initialWorkouts = listOf(
+                fakeWorkout(
+                    id = 1L,
+                    title = "本周训练",
+                    notes = "",
+                    dateEpochDayOverride = thisWeekStart,
+                ),
+                fakeWorkout(
+                    id = 2L,
+                    title = "上周训练",
+                    notes = "",
+                    dateEpochDayOverride = lastWeekStart,
+                ),
+            ),
+        )
+        val repository = createRepository(workoutDao = workoutDao)
+
+        val wow = repository.observeWeekOverWeekChanges().first()
+
+        assertEquals(0, wow.workoutCountChange)
+        assertEquals(1, wow.previousWeekWorkoutCount)
+    }
+
+    @Test
+    fun observe_training_days_counts_distinct_days() = runBlocking {
+        val dao = FakeWorkoutLogDao(
+            initialWorkouts = listOf(
+                fakeWorkout(id = 1L, title = "Day 1", notes = "", dateEpochDayOverride = 100L),
+                fakeWorkout(id = 2L, title = "Day 1 again", notes = "", dateEpochDayOverride = 100L),
+                fakeWorkout(id = 3L, title = "Day 2", notes = "", dateEpochDayOverride = 101L),
+            ),
+        )
+        val repository = createRepository(workoutDao = dao)
+        val days = dao.observeTrainingDaysBetween(100L, 101L).first()
+        assertEquals(2, days)
+    }
+
     private fun fakeWorkout(
         id: Long,
         title: String,
         notes: String,
+        dateEpochDayOverride: Long? = null,
         exercises: List<StrengthExerciseWithSets> = listOf(
             fakeExercise(
                 exerciseId = id * 10,
@@ -202,10 +252,11 @@ class OfflineFitnessRepositoryTest {
             ),
         ),
     ): WorkoutWithDetails {
+        val epochDay = dateEpochDayOverride ?: 20_208L
         return WorkoutWithDetails(
             workoutLog = WorkoutLogEntity(
                 id = id,
-                dateEpochDay = 20_208L,
+                dateEpochDay = epochDay,
                 title = title,
                 notes = notes,
                 createdAtMillis = id,
@@ -252,6 +303,17 @@ private class FakeWorkoutLogDao(
 
     override fun observeWorkoutCountSince(startEpochDay: Long): Flow<Int> {
         return MutableStateFlow(workouts.value.count { it.workoutLog.dateEpochDay >= startEpochDay })
+    }
+
+    override fun observeWorkoutCountBetween(startDay: Long, endDay: Long): Flow<Int> {
+        return MutableStateFlow(workouts.value.count { it.workoutLog.dateEpochDay in startDay..endDay })
+    }
+
+    override fun observeTrainingDaysBetween(startDay: Long, endDay: Long): Flow<Int> {
+        val days = workouts.value.map { it.workoutLog.dateEpochDay }
+            .filter { it in startDay..endDay }
+            .distinct().size
+        return MutableStateFlow(days)
     }
 
     override suspend fun insertWorkoutLog(workoutLog: WorkoutLogEntity): Long = workoutLog.id
@@ -311,7 +373,20 @@ private class FakeGoalDao : GoalDao {
 }
 
 private class FakeStatsDao : StatsDao {
+    private val bodyMetricTrend = MutableStateFlow<List<BodyMetricTrend>>(emptyList())
+    private val workoutDates = MutableStateFlow<List<Long>>(emptyList())
+    private val cardioByDate = MutableStateFlow<List<CardioByDate>>(emptyList())
+    private val cardioDuration = MutableStateFlow<List<CardioDurationRow>>(emptyList())
+    private val strengthTrend = MutableStateFlow<List<StrengthTrendRow>>(emptyList())
+    private val cardioMinutes = MutableStateFlow(0)
+
     override fun observeTotalCardioMinutes(): Flow<Int> = MutableStateFlow(0)
     override fun observeTotalCardioDistanceKm(): Flow<Float> = MutableStateFlow(0f)
     override fun observeBestStrengthWeightKg(): Flow<Float> = MutableStateFlow(0f)
+    override fun observeBodyMetricTrend(): Flow<List<BodyMetricTrend>> = bodyMetricTrend
+    override fun observeWorkoutDates(): Flow<List<Long>> = workoutDates
+    override fun observeCardioByDateRange(startDay: Long, endDay: Long): Flow<List<CardioByDate>> = cardioByDate
+    override fun observeCardioDurationTrend(startDay: Long, endDay: Long): Flow<List<CardioDurationRow>> = cardioDuration
+    override fun observeStrengthTrend(startDay: Long, endDay: Long): Flow<List<StrengthTrendRow>> = strengthTrend
+    override fun observeCardioMinutesBetween(startDay: Long, endDay: Long): Flow<Int> = cardioMinutes
 }

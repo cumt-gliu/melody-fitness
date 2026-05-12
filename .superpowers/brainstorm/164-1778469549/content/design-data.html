@@ -1,0 +1,59 @@
+<h2>数据层新增</h2>
+
+<div class="mockup">
+  <div class="mockup-body" style="padding:20px;font-size:14px;line-height:1.6">
+
+    <h3>需要新增的 DAO 查询</h3>
+
+    <div style="background:#f5f0e8;border-radius:8px;padding:12px;margin-bottom:12px">
+      <p><strong>1. 训练类型分布</strong> — 按类型统计训练次数</p>
+      <code style="font-size:12px;background:#e0d8cc;padding:2px 6px;border-radius:4px">
+        SELECT activityType, COUNT(*) as count FROM cardio_entries WHERE dateEpochDay BETWEEN ? AND ? GROUP BY activityType
+      </code>
+      <p style="font-size:11px;color:#8b8b8b;margin-top:4px">＋ strength 类型从 workout_logs 关联 strength_exercises 统计</p>
+    </div>
+
+    <div style="background:#f5f0e8;border-radius:8px;padding:12px;margin-bottom:12px">
+      <p><strong>2. 有氧时长趋势</strong> — 按日/周聚合</p>
+      <code style="font-size:12px;background:#e0d8cc;padding:2px 6px;border-radius:4px">
+        SELECT w.dateEpochDay, SUM(c.durationMinutes) as totalMinutes FROM cardio_entries c JOIN workout_logs w ON c.workoutLogId = w.id GROUP BY w.dateEpochDay ORDER BY w.dateEpochDay
+      </code>
+    </div>
+
+    <div style="background:#f5f0e8;border-radius:8px;padding:12px;margin-bottom:12px">
+      <p><strong>3. 力量动作历史趋势</strong> — 按动作名查每次训练重量</p>
+      <code style="font-size:12px;background:#e0d8cc;padding:2px 6px;border-radius:4px">
+        SELECT w.dateEpochDay, e.name, MAX(s.weightKg) as maxWeight, SUM(s.weightKg * s.reps) as volume FROM strength_sets s JOIN strength_exercises e ON s.exerciseId = e.id JOIN workout_logs w ON e.workoutLogId = w.id GROUP BY w.dateEpochDay, e.name ORDER BY w.dateEpochDay
+      </code>
+    </div>
+
+    <h3 style="margin-top:20px">StatsUiState 新增字段</h3>
+    <div style="background:#f5f0e8;border-radius:8px;padding:12px">
+<pre style="font-size:12px;margin:0">
+data class StatsUiState(
+    // ... 已有字段
+    // 新增：
+    val weekOverWeekChanges: WeekOverWeekChanges = WeekOverWeekChanges(),
+    val workoutTypeDistribution: List&lt;WorkoutTypeCount&gt; = emptyList(),
+    val cardioDurationTrend: List&lt;DurationPoint&gt; = emptyList(),
+    val strengthExerciseTrends: Map&lt;String, List&lt;StrengthTrendPoint&gt;&gt; = emptyMap(),
+    val selectedExercise: String = "",
+)
+</pre>
+    </div>
+
+    <h3 style="margin-top:20px">时间筛选器联动</h3>
+    <p>ViewModel 中增加 <code>selectedTimeRange</code> 状态，Tab 内容和图表根据该状态重新查询/过滤。</p>
+    <div style="background:#f5f0e8;border-radius:8px;padding:12px">
+<pre style="font-size:12px;margin:0">
+enum class TimeRange { THIS_WEEK, THIS_MONTH, THIS_QUARTER, THIS_YEAR, CUSTOM }
+
+// 筛选器变化 → 重新计算各 Flow 的时间窗口参数
+// 概览行固定本周，不受影响
+</pre>
+    </div>
+
+  </div>
+</div>
+
+<p>新增 3 个 DAO 查询 + ViewModel 状态扩展 + 时间筛选状态管理。数据层设计 ok 吗？</p>

@@ -220,7 +220,6 @@ class OfflineFitnessRepository(
     }
 
     override fun observeSparklineData(): Flow<SparklineData> {
-        val weekField = WeekFields.of(Locale.getDefault()).weekOfWeekBasedYear()
         val today = LocalDate.now()
         val cutoff = today.minusWeeks(8).toEpochDay()
 
@@ -234,8 +233,7 @@ class OfflineFitnessRepository(
             val cardioByWeek = mutableMapOf<Int, Int>()
             workouts.filter { it.workoutLog.dateEpochDay >= cutoff }.forEach { w ->
                 if (w.cardioEntries.isNotEmpty()) {
-                    val date = LocalDate.ofEpochDay(w.workoutLog.dateEpochDay)
-                    val yw = date.year * 100 + date.get(weekField)
+                    val yw = LocalDate.ofEpochDay(w.workoutLog.dateEpochDay).toYearWeek()
                     val mins = w.cardioEntries.sumOf { it.durationMinutes }
                     cardioByWeek[yw] = (cardioByWeek[yw] ?: 0) + mins
                 }
@@ -244,24 +242,19 @@ class OfflineFitnessRepository(
             // weekly training days from dates
             val daysByWeek = mutableMapOf<Int, MutableSet<Long>>()
             dates.filter { it >= cutoff }.forEach { day ->
-                val yw = LocalDate.ofEpochDay(day).let { it.year * 100 + it.get(weekField) }
+                val yw = LocalDate.ofEpochDay(day).toYearWeek()
                 daysByWeek.getOrPut(yw) { mutableSetOf() }.add(day)
             }
 
             // weekly weights (latest per week) from body trend
             val weightByWeek = mutableMapOf<Int, Float>()
             bodyTrend.filter { it.dateEpochDay >= cutoff }.forEach { point ->
-                val yw = LocalDate.ofEpochDay(point.dateEpochDay).let {
-                    it.year * 100 + it.get(weekField)
-                }
-                weightByWeek[yw] = point.weightKg
+                weightByWeek[LocalDate.ofEpochDay(point.dateEpochDay).toYearWeek()] = point.weightKg
             }
 
             // align to 8-week window
             val weeks = (0 until 8).map { weekAgo ->
-                today.minusWeeks(weekAgo.toLong()).let {
-                    it.year * 100 + it.get(weekField)
-                }
+                today.minusWeeks(weekAgo.toLong()).toYearWeek()
             }.reversed()
 
             SparklineData(
@@ -454,6 +447,9 @@ class OfflineFitnessRepository(
     override suspend fun deleteWorkoutHistoryItem(workoutId: Long) {
         workoutLogDao.deleteWorkoutLogById(workoutId)
     }
+
+    private fun LocalDate.toYearWeek(weekField: java.time.temporal.TemporalField = WeekFields.of(Locale.getDefault()).weekOfWeekBasedYear()): Int =
+        year * 100 + get(weekField)
 
     private fun startOfWeekEpochDay(today: LocalDate = LocalDate.now()): Long {
         val delta = (today.dayOfWeek.value - DayOfWeek.MONDAY.value + 7) % 7

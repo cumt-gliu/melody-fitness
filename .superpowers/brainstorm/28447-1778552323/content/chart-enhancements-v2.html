@@ -1,0 +1,70 @@
+<h2>方向 3：图表视觉增强</h2>
+<p class="subtitle">加上轴标签后：横轴 = 日期，纵轴 = 数值</p>
+
+<div class="section" style="border:1px solid #e8e0d4;border-radius:8px;padding:16px;margin-bottom:16px;">
+  <h3>① 有氧趋势面积渐变填充</h3>
+  <p>横轴：训练日期 · 纵轴：分钟数</p>
+  <div style="background:#f7f2e8;border-radius:4px;padding:12px;margin-top:8px;">
+    <div style="height:80px;position:relative;">
+      <svg width="100%" height="80" viewBox="0 0 260 80" preserveAspectRatio="none">
+        <defs><linearGradient id="grad2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1f6f50" stop-opacity="0.3"/><stop offset="100%" stop-color="#1f6f50" stop-opacity="0.02"/></linearGradient></defs>
+        <!-- Grid lines -->
+        <line x1="30" y1="10" x2="230" y2="10" stroke="#ddd" stroke-width="0.5"/>
+        <line x1="30" y1="30" x2="230" y2="30" stroke="#ddd" stroke-width="0.5"/>
+        <line x1="30" y1="50" x2="230" y2="50" stroke="#ddd" stroke-width="0.5"/>
+        <!-- Area fill -->
+        <path d="M30,60 Q55,50 80,45 Q105,30 130,35 Q155,22 180,25 Q205,12 230,15 L230,70 L30,70 Z" fill="url(#grad2)"/>
+        <!-- Line -->
+        <polyline points="30,60 55,50 80,45 105,30 130,35 155,22 180,25 205,12 230,15" fill="none" stroke="#1f6f50" stroke-width="2"/>
+        <!-- Y axis label -->
+        <text x="2" y="30" font-size="7" fill="#888" transform="rotate(-90,6,30)">分钟</text>
+        <text x="2" y="14" font-size="6" fill="#888">60</text>
+        <text x="2" y="34" font-size="6" fill="#888">30</text>
+        <text x="2" y="64" font-size="6" fill="#888">0</text>
+        <!-- X axis labels -->
+        <text x="40" y="74" font-size="6" fill="#888">5/4</text>
+        <text x="115" y="74" font-size="6" fill="#888">5/8</text>
+        <text x="190" y="74" font-size="6" fill="#888">5/12</text>
+      </svg>
+    </div>
+  </div>
+  <p style="margin-top:4px;font-size:11px;color:#999;">本期累计 180 分钟 · 日均 25 分钟</p>
+</div>
+
+<div class="section" style="border:1px solid #e8e0d4;border-radius:8px;padding:16px;margin-bottom:16px;">
+  <h3>② 力量重量 PR 标记点</h3>
+  <p>横轴：训练日期 · 纵轴：重量 (kg)</p>
+  <div style="background:#f7f2e8;border-radius:4px;padding:12px;margin-top:8px;">
+    <div style="height:80px;position:relative;">
+      <svg width="100%" height="80" viewBox="0 0 260 80" preserveAspectRatio="none">
+        <!-- Grid -->
+        <line x1="30" y1="10" x2="230" y2="10" stroke="#ddd" stroke-width="0.5"/>
+        <line x1="30" y1="30" x2="230" y2="30" stroke="#ddd" stroke-width="0.5"/>
+        <line x1="30" y1="50" x2="230" y2="50" stroke="#ddd" stroke-width="0.5"/>
+        <!-- Line -->
+        <polyline points="30,60 55,55 80,40 105,45 130,30 155,35 180,20 205,25 230,22" fill="none" stroke="#1f6f50" stroke-width="2"/>
+        <!-- PR markers -->
+        <circle cx="80" cy="40" r="5" fill="#b36a2c" stroke="#fff" stroke-width="1"/>
+        <text x="73" y="34" font-size="6" fill="#b36a2c" font-weight="bold">PR 60kg</text>
+        <circle cx="130" cy="30" r="5" fill="#b36a2c" stroke="#fff" stroke-width="1"/>
+        <text x="123" y="24" font-size="6" fill="#b36a2c" font-weight="bold">PR 65kg</text>
+        <circle cx="180" cy="20" r="5" fill="#b36a2c" stroke="#fff" stroke-width="1"/>
+        <text x="173" y="14" font-size="6" fill="#b36a2c" font-weight="bold">PR 70kg</text>
+        <!-- Axis labels -->
+        <text x="2" y="14" font-size="6" fill="#888">80</text>
+        <text x="2" y="34" font-size="6" fill="#888">60</text>
+        <text x="2" y="54" font-size="6" fill="#888">40</text>
+        <text x="2" y="74" font-size="6" fill="#888">kg</text>
+        <text x="55" y="76" font-size="6" fill="#888">4/28</text>
+        <text x="125" y="76" font-size="6" fill="#888">5/5</text>
+        <text x="200" y="76" font-size="6" fill="#888">5/12</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="border:1px solid #e8e0d4;border-radius:8px;padding:16px;margin-bottom:16px;">
+  <h3>③ Tooltip 数据点提示</h3>
+  <p>Vico 内置 <code>rememberMarker()</code>，触摸图表时显示对应数据点的日期 + 数值。</p>
+  <p>适用图表：有氧趋势线、体重趋势线、重量趋势线</p>
+</div>

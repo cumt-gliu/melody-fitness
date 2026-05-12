@@ -1,0 +1,753 @@
+package com.giannisliu.melodyfitness.ui
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.giannisliu.melodyfitness.data.repository.BodyMetricTrendPoint
+import com.giannisliu.melodyfitness.data.repository.CardioDurationPoint
+import com.giannisliu.melodyfitness.data.repository.StrengthTrendPoint
+import com.giannisliu.melodyfitness.data.repository.WeekOverWeekChanges
+import com.giannisliu.melodyfitness.data.repository.WeeklyWorkoutCount
+import com.giannisliu.melodyfitness.data.repository.WeightUnit
+import com.giannisliu.melodyfitness.data.repository.WorkoutTypeCount
+import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
+import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
+import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
+import com.patrykandpatrick.vico.compose.cartesian.axis.rememberBottom
+import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStart
+import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
+import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
+import com.patrykandpatrick.vico.core.cartesian.axis.HorizontalAxis
+import com.patrykandpatrick.vico.core.cartesian.axis.VerticalAxis
+
+@Composable
+fun StatsScreen(
+    paddingValues: PaddingValues,
+    uiState: StatsUiState,
+    weightUnit: WeightUnit,
+    onUpdateTimeRange: (TimeRange) -> Unit = {},
+    onUpdateActiveTab: (StatsTab) -> Unit = {},
+    onSelectExercise: (String) -> Unit = {},
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        SectionTitle(title = "训练统计")
+
+        OverviewRow(
+            weeklyWorkoutCount = uiState.weeklyWorkoutCount,
+            totalCardioMinutes = uiState.totalCardioMinutes,
+            latestWeightKg = uiState.latestWeightKg,
+            wow = uiState.weekOverWeekChanges,
+            onCardClick = { onUpdateActiveTab(it) },
+        )
+
+        TimeRangeFilter(
+            selected = uiState.selectedTimeRange,
+            onSelect = onUpdateTimeRange,
+        )
+
+        StatsTabRow(
+            selected = uiState.activeTab,
+            onSelect = onUpdateActiveTab,
+        )
+
+        when (uiState.activeTab) {
+            StatsTab.TRAINING -> TrainingAnalysisTab(uiState)
+            StatsTab.BODY -> BodyMetricsTab(uiState, weightUnit)
+            StatsTab.STRENGTH -> StrengthProgressTab(uiState, onSelectExercise)
+        }
+
+        StatsAdviceCard(uiState)
+    }
+}
+
+// ── Overview Row ──────────────────────────────────────────────
+
+@Composable
+private fun OverviewRow(
+    weeklyWorkoutCount: Int,
+    totalCardioMinutes: Int,
+    latestWeightKg: Float?,
+    wow: WeekOverWeekChanges,
+    onCardClick: (StatsTab) -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        OverviewCard(
+            modifier = Modifier.weight(1f),
+            title = "本周训练",
+            value = "$weeklyWorkoutCount 次",
+            change = wow.workoutCountChange,
+            compareLabel = "vs 上周 ${wow.previousWeekWorkoutCount}",
+            onClick = { onCardClick(StatsTab.TRAINING) },
+        )
+        OverviewCard(
+            modifier = Modifier.weight(1f),
+            title = "有氧时长",
+            value = "${totalCardioMinutes}分钟",
+            change = wow.cardioMinutesChange,
+            compareLabel = "vs 上周 ${wow.previousWeekCardioMinutes}",
+            onClick = { onCardClick(StatsTab.TRAINING) },
+        )
+        OverviewCard(
+            modifier = Modifier.weight(1f),
+            title = "体重变化",
+            value = latestWeightKg?.let {
+                formatWeightChange(it, wow.weightChange, WeightUnit.KG)
+            } ?: "--",
+            change = null,
+            compareLabel = "较上周",
+            onClick = { onCardClick(StatsTab.BODY) },
+        )
+        OverviewCard(
+            modifier = Modifier.weight(1f),
+            title = "训练天数",
+            value = "${wow.previousWeekTrainingDays + (wow.trainingDaysChange ?: 0)} 天",
+            change = wow.trainingDaysChange,
+            compareLabel = "vs 上周 ${wow.previousWeekTrainingDays}",
+            onClick = { onCardClick(StatsTab.TRAINING) },
+        )
+    }
+}
+
+@Composable
+private fun OverviewCard(
+    modifier: Modifier = Modifier,
+    title: String,
+    value: String,
+    change: Int?,
+    compareLabel: String,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = modifier.clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(title, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            if (change != null) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    val (arrow, color) = if (change >= 0) "▲" to Color(0xFF27ae60) else "▼" to Color(0xFFc0392b)
+                    Text("$arrow${if (change >= 0) "+" else ""}$change", color = color, style = MaterialTheme.typography.labelSmall)
+                }
+            }
+            Text(compareLabel, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+private fun formatWeightChange(latestKg: Float, change: Float?, unit: WeightUnit): String {
+    val formatted = formatWeight(latestKg, unit)
+    if (change == null) return formatted
+    val prefix = if (change >= 0) "+" else ""
+    return "$prefix${formatFloat(change)} ${unit.symbol}"
+}
+
+// ── Time Range + Tab Navigation ──────────────────────────────
+
+@Composable
+private fun TimeRangeFilter(
+    selected: TimeRange,
+    onSelect: (TimeRange) -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        TimeRange.entries.forEach { range ->
+            FilterChip(
+                selected = selected == range,
+                onClick = { onSelect(range) },
+                label = { Text(range.label) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatsTabRow(
+    selected: StatsTab,
+    onSelect: (StatsTab) -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        StatsTab.entries.forEach { tab ->
+            FilterChip(
+                selected = selected == tab,
+                onClick = { onSelect(tab) },
+                label = { Text(tab.label) },
+            )
+        }
+    }
+}
+
+// ── Tab 1: Training Analysis ─────────────────────────────────
+
+@Composable
+private fun TrainingAnalysisTab(uiState: StatsUiState) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            TrainingFrequencyBars(
+                modifier = Modifier.weight(1f),
+                weeklyCounts = uiState.weeklyWorkoutCounts,
+            )
+            WorkoutDistributionChart(
+                modifier = Modifier.weight(1f),
+                distribution = uiState.workoutTypeDistribution,
+            )
+        }
+        CardioDurationChart(
+            trend = uiState.cardioDurationTrend,
+        )
+    }
+}
+
+@Composable
+private fun TrainingFrequencyBars(
+    weeklyCounts: List<WeeklyWorkoutCount>,
+    modifier: Modifier = Modifier,
+) {
+    if (weeklyCounts.isEmpty()) return
+    val avg = weeklyCounts.map { it.count }.average()
+
+    Card(modifier = modifier) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text("训练频次", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+            Box(modifier = Modifier.fillMaxWidth().height(160.dp)) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val barCount = weeklyCounts.size
+                    val barWidth = size.width / barCount * 0.6f
+                    val gap = size.width / barCount * 0.4f
+                    val maxCount = (weeklyCounts.maxOf { it.count }.coerceAtLeast(1)).toFloat()
+                    val chartHeight = size.height * 0.85f
+
+                    weeklyCounts.forEachIndexed { index, wc ->
+                        val barHeight = (wc.count / maxCount) * chartHeight
+                        val x = index * (barWidth + gap) + gap / 2
+                        val y = size.height - barHeight
+                        val color = if (wc.count >= avg) Color(0xFF1f6f50) else Color(0xFFcc9a62)
+                        drawRect(color, Offset(x, y), Size(barWidth, barHeight))
+                    }
+
+                    // Average line
+                    val avgY = size.height - (avg.toFloat() / maxCount) * chartHeight
+                    drawLine(
+                        Color(0xFFb36a2c), Offset(0f, avgY), Offset(size.width, avgY),
+                        strokeWidth = 1.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f)),
+                    )
+                }
+            }
+            if (weeklyCounts.isNotEmpty()) {
+                Text("周均 ${"%.1f".format(avg)} 次", color = Color(0xFFb36a2c), style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorkoutDistributionChart(
+    distribution: List<WorkoutTypeCount>,
+    modifier: Modifier = Modifier,
+) {
+    if (distribution.isEmpty()) return
+    val total = distribution.sumOf { it.count }
+    val colors = listOf(Color(0xFF1f6f50), Color(0xFF4e8a6c), Color(0xFFcc9a62), Color(0xFFb36a2c))
+
+    Card(modifier = modifier) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text("训练类型分布", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(120.dp)) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        var startAngle = -90f
+                        distribution.forEachIndexed { index, wc ->
+                            val sweep = (wc.count.toFloat() / total) * 360f
+                            drawArc(colors[index % colors.size], startAngle, sweep, useCenter = true)
+                            startAngle += sweep
+                        }
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    distribution.forEachIndexed { index, wc ->
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(colors[index % colors.size]),
+                            )
+                            Text("${wc.type} ${wc.count * 100 / total}%", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            }
+            Text("共计 $total 次训练", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+@Composable
+private fun CardioDurationChart(
+    trend: List<CardioDurationPoint>,
+    modifier: Modifier = Modifier,
+) {
+    if (trend.isEmpty()) return
+    val totalMinutes = trend.sumOf { it.totalMinutes }
+    val days = trend.size
+
+    val modelProducer = remember { CartesianChartModelProducer() }
+
+    LaunchedEffect(trend) {
+        modelProducer.runTransaction {
+            lineSeries { series(trend.map { it.totalMinutes.toDouble() }) }
+        }
+    }
+
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text("有氧时长趋势", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+            CartesianChartHost(
+                chart = rememberCartesianChart(
+                    rememberLineCartesianLayer(),
+                    startAxis = VerticalAxis.rememberStart(),
+                    bottomAxis = HorizontalAxis.rememberBottom(),
+                ),
+                modelProducer = modelProducer,
+                modifier = Modifier.fillMaxWidth().height(140.dp),
+            )
+            Text("本期累计 ${totalMinutes}分钟 · 日均 ${totalMinutes / days}分钟",
+                color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+// ── Tab 2: Body Metrics ───────────────────────────────────────
+
+@Composable
+private fun BodyMetricsTab(
+    uiState: StatsUiState,
+    weightUnit: WeightUnit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        PeriodComparisonRow(uiState, weightUnit)
+
+        EnhancedWeightTrendChart(
+            trend = uiState.bodyMetricTrend,
+            weightUnit = weightUnit,
+        )
+
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MiniTrendChart(
+                modifier = Modifier.weight(1f),
+                title = "腰围趋势",
+                data = uiState.bodyMetricTrend.mapNotNull { it.waistCm?.let { cm -> cm.toDouble() } },
+                lineColor = Color(0xFF4e8a6c),
+            )
+            MiniTrendChart(
+                modifier = Modifier.weight(1f),
+                title = "睡眠趋势",
+                data = uiState.bodyMetricTrend.mapNotNull { it.sleepHours?.let { h -> h.toDouble() } },
+                lineColor = Color(0xFFcc9a62),
+                referenceLine = 7.0,
+            )
+            MiniTrendChart(
+                modifier = Modifier.weight(1f),
+                title = "疲劳趋势",
+                data = uiState.bodyMetricTrend.mapNotNull { it.fatigueScore?.let { f -> f.toDouble() } },
+                lineColor = Color(0xFFcc9a62),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PeriodComparisonRow(
+    uiState: StatsUiState,
+    weightUnit: WeightUnit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ComparisonCard(modifier = Modifier.weight(1f), label = "体重", value = uiState.latestWeightKg?.let { formatWeight(it, weightUnit) } ?: "--", change = uiState.weightChangeSinceLastRecordKg)
+        ComparisonCard(modifier = Modifier.weight(1f), label = "体脂", value = uiState.latestBodyFatPercentage?.let { "${formatFloat(it)}%" } ?: "--", change = null)
+        ComparisonCard(modifier = Modifier.weight(1f), label = "腰围", value = uiState.latestWaistCm?.let { "${formatFloat(it)} cm" } ?: "--", change = null)
+        ComparisonCard(modifier = Modifier.weight(1f), label = "睡眠", value = uiState.latestSleepHours?.let { "${formatFloat(it)} h" } ?: "--", change = null)
+        ComparisonCard(modifier = Modifier.weight(1f), label = "疲劳", value = uiState.latestFatigueScore?.let { "$it/10" } ?: "--", change = uiState.latestFatigueScore?.let { -it.toFloat() })
+    }
+}
+
+@Composable
+private fun ComparisonCard(
+    label: String,
+    value: String,
+    change: Float?,
+    modifier: Modifier = Modifier,
+) {
+    Card(modifier = modifier) {
+        Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            if (change != null) {
+                val (arrow, color) = when {
+                    change > 0 -> "▲" to Color(0xFF27ae60)
+                    change < 0 -> "▼" to Color(0xFFc0392b)
+                    else -> "—" to Color(0xFF7f8c8d)
+                }
+                Text("$arrow ${formatFloat(change)}", color = color, style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+}
+
+@Composable
+private fun EnhancedWeightTrendChart(
+    trend: List<BodyMetricTrendPoint>,
+    weightUnit: WeightUnit,
+    modifier: Modifier = Modifier,
+) {
+    if (trend.size < 2) {
+        if (trend.isEmpty()) return
+        Card(modifier = modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("体重趋势 + 体脂", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text("至少需要 2 条记录", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        return
+    }
+
+    val modelProducer = remember { CartesianChartModelProducer() }
+
+    LaunchedEffect(trend, weightUnit) {
+        modelProducer.runTransaction {
+            lineSeries {
+                series(
+                    trend.map { point ->
+                        when (weightUnit) {
+                            WeightUnit.KG -> point.weightKg.toDouble()
+                            WeightUnit.LB -> (point.weightKg * 2.20462).toDouble()
+                        }
+                    },
+                )
+                if (trend.any { it.bodyFatPercentage != null }) {
+                    series(trend.map { it.bodyFatPercentage?.toDouble() ?: Double.NaN })
+                }
+            }
+        }
+    }
+
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text("体重趋势 + 体脂", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+            CartesianChartHost(
+                chart = rememberCartesianChart(
+                    rememberLineCartesianLayer(),
+                    startAxis = VerticalAxis.rememberStart(),
+                    bottomAxis = HorizontalAxis.rememberBottom(),
+                ),
+                modelProducer = modelProducer,
+                modifier = Modifier.fillMaxWidth().height(180.dp),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("● 体重", color = Color(0xFF1f6f50), style = MaterialTheme.typography.labelSmall)
+                if (trend.any { it.bodyFatPercentage != null }) {
+                    Text("- - 体脂", color = Color(0xFFb36a2c), style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MiniTrendChart(
+    modifier: Modifier = Modifier,
+    title: String,
+    data: List<Double>,
+    lineColor: Color,
+    referenceLine: Double? = null,
+) {
+    Card(modifier = modifier) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(title, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            if (data.size < 2) {
+                Text("数据不足", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+            } else {
+                Box(modifier = Modifier.fillMaxWidth().height(60.dp)) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val min = data.min()
+                        val max = data.max()
+                        val range = (max - min).coerceAtLeast(1.0)
+                        val points = data.mapIndexed { i, v ->
+                            val x = (i.toFloat() / (data.size - 1).coerceAtLeast(1)) * size.width
+                            val y = ((v - min) / range).toFloat() * size.height
+                            Offset(x, size.height - y)
+                        }
+                        for (i in 0 until points.size - 1) {
+                            drawLine(lineColor, points[i], points[i + 1], strokeWidth = 2f)
+                        }
+                        referenceLine?.let { ref ->
+                            val refY = ((ref - min) / range).toFloat() * size.height
+                            drawLine(
+                                Color(0xFFb36a2c), Offset(0f, size.height - refY),
+                                Offset(size.width, size.height - refY), strokeWidth = 1f,
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f)),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Tab 3: Strength Progress ─────────────────────────────────
+
+@Composable
+private fun StrengthProgressTab(
+    uiState: StatsUiState,
+    onSelectExercise: (String) -> Unit,
+) {
+    if (uiState.strengthExerciseNames.isEmpty()) {
+        EmptyCard(title = "还没有力量训练记录", body = "记录几次力量训练后，这里会展示各动作的重量进步趋势。")
+        return
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        ExerciseSelector(
+            exercises = uiState.strengthExerciseNames,
+            selected = uiState.selectedExercise,
+            onSelect = onSelectExercise,
+        )
+
+        val selectedTrend = uiState.strengthExerciseTrends[uiState.selectedExercise].orEmpty()
+        StrengthStatsRow(trend = selectedTrend)
+
+        if (selectedTrend.size >= 2) {
+            StrengthWeightChart(trend = selectedTrend)
+            StrengthVolumeChart(trend = selectedTrend)
+        } else {
+            Text("选中动作的数据不足，暂无法展示趋势", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ExerciseSelector(
+    exercises: List<String>,
+    selected: String,
+    onSelect: (String) -> Unit,
+) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        exercises.forEach { name ->
+            FilterChip(
+                selected = selected == name,
+                onClick = { onSelect(name) },
+                label = { Text(name) },
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun StrengthStatsRow(trend: List<StrengthTrendPoint>) {
+    val bestWeight = trend.maxOfOrNull { it.maxWeightKg } ?: 0f
+    val lastWeight = trend.lastOrNull()?.maxWeightKg ?: 0f
+    val prevWeight = trend.getOrNull(trend.size - 2)?.maxWeightKg
+    val totalVolume = trend.sumOf { it.volumeKg.toDouble() }.toFloat()
+    val lastVolume = trend.lastOrNull()?.volumeKg ?: 0f
+
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        MiniStatCard(modifier = Modifier.weight(1f), label = "最佳重量", value = "${formatFloat(bestWeight)} kg")
+        MiniStatCard(modifier = Modifier.weight(1f), label = "本次重量", value = "${formatFloat(lastWeight)} kg", change = prevWeight?.let { lastWeight - it })
+        MiniStatCard(modifier = Modifier.weight(1f), label = "总容量", value = "${formatFloat(totalVolume)} kg")
+        MiniStatCard(modifier = Modifier.weight(1f), label = "本次容量", value = "${formatFloat(lastVolume)} kg")
+    }
+}
+
+@Composable
+private fun MiniStatCard(
+    label: String,
+    value: String,
+    change: Float? = null,
+    modifier: Modifier = Modifier,
+) {
+    Card(modifier = modifier) {
+        Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun StrengthWeightChart(
+    trend: List<StrengthTrendPoint>,
+    modifier: Modifier = Modifier,
+) {
+    val modelProducer = remember { CartesianChartModelProducer() }
+    val prIndices = remember(trend) {
+        var maxSoFar = -1f
+        trend.mapIndexed { i, p ->
+            if (p.maxWeightKg > maxSoFar) { maxSoFar = p.maxWeightKg; i } else -1
+        }.filter { it >= 0 }
+    }
+
+    LaunchedEffect(trend) {
+        modelProducer.runTransaction {
+            lineSeries { series(trend.map { it.maxWeightKg.toDouble() }) }
+        }
+    }
+
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text("重量趋势", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+            CartesianChartHost(
+                chart = rememberCartesianChart(
+                    rememberLineCartesianLayer(),
+                    startAxis = VerticalAxis.rememberStart(),
+                    bottomAxis = HorizontalAxis.rememberBottom(),
+                ),
+                modelProducer = modelProducer,
+                modifier = Modifier.fillMaxWidth().height(160.dp),
+            )
+            if (prIndices.isNotEmpty()) {
+                val prPoint = trend[prIndices.last()]
+                Text("PR ${formatFloat(prPoint.maxWeightKg)} kg", color = Color(0xFFb36a2c), style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StrengthVolumeChart(
+    trend: List<StrengthTrendPoint>,
+    modifier: Modifier = Modifier,
+) {
+    val modelProducer = remember { CartesianChartModelProducer() }
+
+    LaunchedEffect(trend) {
+        modelProducer.runTransaction {
+            lineSeries { series(trend.map { it.volumeKg.toDouble() }) }
+        }
+    }
+
+    val totalVolume = trend.sumOf { it.volumeKg.toDouble() }.toFloat()
+    val avgVolume = if (trend.isNotEmpty()) totalVolume / trend.size else 0f
+
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text("训练容量趋势", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+            CartesianChartHost(
+                chart = rememberCartesianChart(
+                    rememberLineCartesianLayer(),
+                    startAxis = VerticalAxis.rememberStart(),
+                    bottomAxis = HorizontalAxis.rememberBottom(),
+                ),
+                modelProducer = modelProducer,
+                modifier = Modifier.fillMaxWidth().height(140.dp),
+            )
+            Text("本期总容量 ${formatFloat(totalVolume)} kg · 单次平均 ${formatFloat(avgVolume)} kg",
+                color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+// ── Advice Card ───────────────────────────────────────────────
+
+@Composable
+private fun StatsAdviceCard(uiState: StatsUiState) {
+    val advice = when (uiState.activeTab) {
+        StatsTab.TRAINING -> getTrainingAdvice(uiState)
+        StatsTab.BODY -> getBodyAdvice(uiState)
+        StatsTab.STRENGTH -> getStrengthAdvice(uiState)
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("建议", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(advice)
+        }
+    }
+}
+
+private fun getTrainingAdvice(uiState: StatsUiState): String {
+    if (uiState.weeklyWorkoutCount < 3) return "这周训练次数还不多，可以优先把频率补上。"
+    if (uiState.totalCardioMinutes < 60) return "有氧累计偏少，可以补一到两次 20-30 分钟中低强度训练。"
+    val strengthPct = uiState.workoutTypeDistribution.find { it.type == "力量" }?.count ?: 0
+    val total = uiState.workoutTypeDistribution.sumOf { it.count }
+    if (total > 0 && strengthPct.toFloat() / total > 0.8f) return "力量训练占比偏高，可以适当增加有氧来平衡训练结构。"
+    return "本周训练节奏不错，继续观察体重和力量的联动变化。"
+}
+
+private fun getBodyAdvice(uiState: StatsUiState): String {
+    return when {
+        uiState.latestFatigueScore != null && uiState.latestFatigueScore >= 8 ->
+            "最近疲劳感偏高，下一次训练可以主动降一点容量，先把恢复拉回来。"
+        uiState.latestSleepHours != null && uiState.latestSleepHours < 6f ->
+            "最近睡眠偏少，先优先补睡眠，再观察体重和力量波动。"
+        uiState.latestBodyFatPercentage != null && uiState.weightChangeSinceLastRecordKg != null &&
+            uiState.weightChangeSinceLastRecordKg > 0.5f ->
+            "体重近期有上升趋势，可以关注一下饮食和训练量的平衡。"
+        else -> "身体指标整体稳定，继续坚持当前训练节奏。"
+    }
+}
+
+private fun getStrengthAdvice(uiState: StatsUiState): String {
+    val trend = uiState.strengthExerciseTrends[uiState.selectedExercise].orEmpty()
+    if (trend.size >= 2) {
+        val lastTwo = trend.takeLast(2)
+        if (lastTwo[1].maxWeightKg > lastTwo[0].maxWeightKg) return "${uiState.selectedExercise} 重量在进步，继续按当前计划训练。"
+        if (lastTwo[1].maxWeightKg == lastTwo[0].maxWeightKg) return "${uiState.selectedExercise} 重量保持稳定，可以考虑下一次尝试加重或加次数。"
+    }
+    return "继续记录力量训练，积累更多数据后会有更精准的建议。"
+}

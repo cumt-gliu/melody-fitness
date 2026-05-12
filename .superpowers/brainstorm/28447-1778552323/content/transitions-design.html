@@ -1,0 +1,38 @@
+<h2>方向 2：切换动效</h2>
+<p class="subtitle">Tab 切换和时间范围切换时，内容区平滑过渡</p>
+
+<div class="section">
+  <p>使用 Compose <code>AnimatedContent</code> + <code>Crossfade</code>，轻量无额外依赖。</p>
+</div>
+
+<div class="section">
+  <h3>Tab 切换动效</h3>
+  <div style="display:flex;gap:1rem;">
+    <div class="option" data-choice="fade" onclick="toggleSelect(this)" style="flex:1;">
+      <div class="letter">A</div>
+      <div class="content">
+        <h4>淡入淡出</h4>
+        <p>内容交叉淡出，简单优雅</p>
+      </div>
+    </div>
+    <div class="option" data-choice="slide" onclick="toggleSelect(this)" style="flex:1;">
+      <div class="letter">B</div>
+      <div class="content">
+        <h4>滑动 + 淡入</h4>
+        <p>内容横向滑入并淡入，更有层次感</p>
+      </div>
+    </div>
+    <div class="option" data-choice="combined" onclick="toggleSelect(this)" style="flex:1;">
+      <div class="letter">C</div>
+      <div class="content">
+        <h4>渐变缩放</h4>
+        <p>内容轻微缩放 + 淡入淡出</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>时间范围切换</h3>
+  <p>图表变化较大，直接用 <code>Crossfade</code> 淡入淡出即可，避免滑动造成视觉混乱。</p>
+</div>

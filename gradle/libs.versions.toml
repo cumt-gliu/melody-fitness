@@ -10,7 +10,8 @@ lifecycleViewModelKtx = "2.8.6"
 navigationCompose = "2.8.3"
 composeUi = "1.7.4"
 composeMaterial3 = "1.3.0"
-room = "2.6.1"
+room = "2.7.0"
+vico = "2.1.0"
 junit4 = "4.13.2"
 
 [libraries]
@@ -29,6 +30,9 @@ androidx-compose-material3 = { group = "androidx.compose.material3", name = "mat
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+vico-core = { group = "com.patrykandpatrick.vico", name = "core", version.ref = "vico" }
+vico-compose = { group = "com.patrykandpatrick.vico", name = "compose", version.ref = "vico" }
+vico-compose-m3 = { group = "com.patrykandpatrick.vico", name = "compose-m3", version.ref = "vico" }
 junit4 = { group = "junit", name = "junit", version.ref = "junit4" }
 
 [plugins]

@@ -1,0 +1,91 @@
+<h2>视觉规范与颜色集成</h2>
+<p class="subtitle">保持与现有主题一致，扩展指标颜色语义</p>
+
+<div class="mockup">
+  <div class="mockup-body" style="padding:20px">
+
+    <h3>主色板（已有）</h3>
+    <div style="display:flex;gap:12px;margin-bottom:20px">
+      <div style="flex:1;background:#1f6f50;border-radius:8px;padding:12px;text-align:center;color:white">
+        <div>主色</div>
+        <div style="font-size:11px;opacity:0.8">#1f6f50</div>
+      </div>
+      <div style="flex:1;background:#4e8a6c;border-radius:8px;padding:12px;text-align:center;color:white">
+        <div>辅助</div>
+        <div style="font-size:11px;opacity:0.8">#4e8a6c</div>
+      </div>
+      <div style="flex:1;background:#b36a2c;border-radius:8px;padding:12px;text-align:center;color:white">
+        <div>强调</div>
+        <div style="font-size:11px;opacity:0.8">#b36a2c</div>
+      </div>
+      <div style="flex:1;background:#cc9a62;border-radius:8px;padding:12px;text-align:center;color:white">
+        <div>浅色</div>
+        <div style="font-size:11px;opacity:0.8">#cc9a62</div>
+      </div>
+    </div>
+
+    <h3>新增语义颜色</h3>
+    <div style="display:flex;gap:12px;margin-bottom:20px">
+      <div style="flex:1;background:#c0392b;border-radius:8px;padding:12px;text-align:center;color:white">
+        <div>警示红</div>
+        <div style="font-size:11px;opacity:0.8">#c0392b</div>
+        <div style="font-size:10px;opacity:0.7">差 / 需注意</div>
+      </div>
+      <div style="flex:1;background:#27ae60;border-radius:8px;padding:12px;text-align:center;color:white">
+        <div>达标绿</div>
+        <div style="font-size:11px;opacity:0.8">#27ae60</div>
+        <div style="font-size:10px;opacity:0.7">好 / 达标</div>
+      </div>
+      <div style="flex:1;background:#f39c12;border-radius:8px;padding:12px;text-align:center;color:white">
+        <div>警告橙</div>
+        <div style="font-size:11px;opacity:0.8">#f39c12</div>
+        <div style="font-size:10px;opacity:0.7">中 / 注意</div>
+      </div>
+      <div style="flex:1;background:#7f8c8d;border-radius:8px;padding:12px;text-align:center;color:white">
+        <div>中性灰</div>
+        <div style="font-size:11px;opacity:0.8">#7f8c8d</div>
+        <div style="font-size:10px;opacity:0.7">无变化</div>
+      </div>
+    </div>
+
+    <h3>概览行颜色规则</h3>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tr style="border-bottom:1px solid #e8e0d4">
+        <th style="text-align:left;padding:8px 4px">指标</th>
+        <th style="text-align:left;padding:8px 4px">正向</th>
+        <th style="text-align:left;padding:8px 4px">负向</th>
+      </tr>
+      <tr style="border-bottom:1px solid #f0e8dc">
+        <td style="padding:8px 4px">本周训练</td>
+        <td style="padding:8px 4px;color:#27ae60">⬆ 增加</td>
+        <td style="padding:8px 4px;color:#c0392b">⬇ 减少</td>
+      </tr>
+      <tr style="border-bottom:1px solid #f0e8dc">
+        <td style="padding:8px 4px">有氧时长</td>
+        <td style="padding:8px 4px;color:#27ae60">⬆ 增加</td>
+        <td style="padding:8px 4px;color:#c0392b">⬇ 减少</td>
+      </tr>
+      <tr style="border-bottom:1px solid #f0e8dc">
+        <td style="padding:8px 4px">体重变化</td>
+        <td style="padding:8px 4px;color:#27ae60">⬇ 下降（减重目标）</td>
+        <td style="padding:8px 4px;color:#c0392b">⬆ 上升</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 4px">训练天数</td>
+        <td style="padding:8px 4px;color:#27ae60">⬆ 增加</td>
+        <td style="padding:8px 4px;color:#c0392b">⬇ 减少</td>
+      </tr>
+    </table>
+
+    <h3 style="margin-top:20px">Tab 内容区颜色规则</h3>
+    <ul style="font-size:13px;line-height:1.8">
+      <li><strong>柱状图</strong>：≥ 周均 = #1f6f50，< 周均 = #cc9a62</li>
+      <li><strong>环形图</strong>：按类型分配主色/辅助色/浅色</li>
+      <li><strong>周期对比箭头</strong>：改善 = 绿色，恶化 = 红色，持平 = 灰色</li>
+      <li><strong>趋势线</strong>：延续主色 #1f6f50，辅助线 #b36a2c 虚线</li>
+    </ul>
+
+  </div>
+</div>
+
+<p>配色方案和语义规则 ok 吗？</p>

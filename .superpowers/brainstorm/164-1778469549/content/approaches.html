@@ -1,0 +1,71 @@
+<h2>三种实现路径</h2>
+
+<div class="section">
+  <h3>方案 A：渐进增强（推荐）</h3>
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>做法</h4>
+      <ul>
+        <li>保留现有 Vico 图表</li>
+        <li>新增概览行 + Tab 布局 + 时间筛选器</li>
+        <li>指标卡片增加环比箭头 + 迷你 sparkline</li>
+        <li>新增环形图 api 显示训练类型分布</li>
+        <li>依赖：新增少量 DAO 查询（周环比、力量历史）</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>优点</h4>
+      <ul>
+        <li>改动可控，Vico 已集成</li>
+        <li>数据源完整，工作量适中</li>
+        <li>容易测试和增量上线</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>方案 B：图表库替换</h3>
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>做法</h4>
+      <ul>
+        <li>替换 Vico 为 MPAndroidChart 或 YCharts</li>
+        <li>获得更丰富的图表类型和交互</li>
+        <li>同上布局改造</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>缺点</h4>
+      <ul>
+        <li>额外依赖，View interop 增加复杂度</li>
+        <li>Vico 已经满足基础需求，替换收益不大</li>
+        <li>迁移成本高</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>方案 C：自定义 Canvas 绘制</h3>
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>做法</h4>
+      <ul>
+        <li>用 Compose Canvas 手绘所有图表</li>
+        <li>完全控制样式和交互</li>
+        <li>无第三方依赖</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>缺点</h4>
+      <ul>
+        <li>开发量大（折线图、柱状图、环形图、sparkline）</li>
+        <li>触摸交互/动画/无障碍需要手写</li>
+        <li>可维护性更低</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<p style="margin-top:24px"><strong>推荐方案 A</strong> — Vico 已集成且能覆盖需求，重心应放在布局和信息设计上，而不是替换图表库。</p>

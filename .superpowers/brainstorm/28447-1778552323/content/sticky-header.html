@@ -1,0 +1,73 @@
+<h2>方向 5：粘性头部 + 滚动行为</h2>
+<p class="subtitle">当前所有内容整页滚动，概览行和筛选器会滚出屏幕</p>
+
+<div class="section">
+  <h3>当前布局（问题）</h3>
+  <div class="mockup" style="margin-top:8px;">
+    <div class="mockup-body" style="padding:0;">
+      <div style="background:#f7f2e8;padding:8px;border-bottom:1px solid #ddd;display:flex;gap:4px;">
+        <div style="flex:1;height:8px;background:#1f6f50;border-radius:2px;"></div>
+        <div style="flex:1;height:8px;background:#4e8a6c;border-radius:2px;"></div>
+        <div style="flex:1;height:8px;background:#b36a2c;border-radius:2px;"></div>
+      </div>
+      <div style="padding:8px;">
+        <div style="height:160px;background:linear-gradient(#e8e0d4,#f7f2e8);border-radius:4px;display:flex;align-items:center;justify-content:center;color:#999;font-size:12px;">滑动后概览行和筛选器移出屏幕</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>改进方案</h3>
+  <p>将布局拆分为上下两层：</p>
+  <div style="display:flex;gap:1rem;margin-top:8px;">
+    <div style="flex:1;border:1px solid #e8e0d4;border-radius:8px;overflow:hidden;">
+      <div style="background:#1f6f50;color:white;padding:6px 12px;font-size:11px;font-weight:bold;">固定头部</div>
+      <div style="padding:8px;background:#fffbf4;">
+        <div style="background:#f7f2e8;border-radius:4px;margin-bottom:4px;padding:6px;">
+          <div style="font-size:10px;color:#666;">概览行（4 卡片）</div>
+        </div>
+        <div style="background:#f7f2e8;border-radius:4px;margin-bottom:4px;padding:6px;">
+          <div style="font-size:10px;color:#666;">时间筛选器</div>
+        </div>
+        <div style="background:#f7f2e8;border-radius:4px;padding:6px;">
+          <div style="font-size:10px;color:#666;">Tab 导航</div>
+        </div>
+      </div>
+    </div>
+    <div style="flex:1;border:1px solid #e8e0d4;border-radius:8px;overflow:hidden;">
+      <div style="color:white;padding:6px 12px;font-size:11px;font-weight:bold;background:transparent;color:#666;">▼ 可滚动区域</div>
+      <div style="padding:8px;background:#f7f2e8;">
+        <div style="height:120px;display:flex;align-items:center;justify-content:center;color:#999;font-size:11px;">Tab 内容区（独立滚动）</div>
+      </div>
+      <div style="padding:8px;border-top:1px solid #ddd;">
+        <div style="font-size:10px;color:#666;">建议卡片</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>实现方式</h3>
+  <p>不需要 <code>LazyColumn</code>。用两层嵌套布局：</p>
+  <pre style="background:#f7f2e8;padding:8px;border-radius:4px;font-size:12px;">
+Column {
+    // 固定头部（不滚动）
+    Column(modifier = Modifier.fillMaxWidth()) {
+        OverviewRow(...)
+        TimeRangeFilter(...)
+        StatsTabRow(...)
+    }
+    // 可滚动内容
+    Column(
+        modifier = Modifier
+            .weight(1f)
+            .verticalScroll(rememberScrollState())
+    ) {
+        TabContent(...)
+        StatsAdviceCard(...)
+    }
+}
+  </pre>
+  <p style="margin-top:8px;font-size:13px;color:#666;">说明：固定头部始终可见，下方内容区独立滚动。需要配合父级 <code>Scaffold</code> 的 <code>paddingValues</code> 调整。</p>
+</div>

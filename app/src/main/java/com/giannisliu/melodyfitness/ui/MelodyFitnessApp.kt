@@ -37,7 +37,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -52,17 +51,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.giannisliu.melodyfitness.data.repository.BodyMetricInput
-import com.giannisliu.melodyfitness.data.repository.CardioWorkoutInput
 import com.giannisliu.melodyfitness.data.repository.GoalInput
 import com.giannisliu.melodyfitness.data.repository.GoalType
 import com.giannisliu.melodyfitness.data.repository.StrengthExerciseHistory
-import com.giannisliu.melodyfitness.data.repository.StrengthExerciseInput
-import com.giannisliu.melodyfitness.data.repository.StrengthExerciseTemplate
-import com.giannisliu.melodyfitness.data.repository.StrengthSetInput
-import com.giannisliu.melodyfitness.data.repository.StrengthWorkoutInput
 import com.giannisliu.melodyfitness.data.repository.WeightUnit
-import com.giannisliu.melodyfitness.domain.WorkoutCatalog
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -79,16 +71,6 @@ private enum class Screen(
     STATS("统计", "统"),
     SETTINGS("设置", "设"),
 }
-
-private data class StrengthSetDraft(
-    val weightText: String = "",
-    val repsText: String = "",
-)
-
-private data class StrengthExerciseDraft(
-    val name: String = "",
-    val sets: List<StrengthSetDraft> = listOf(StrengthSetDraft()),
-)
 
 @Composable
 fun MelodyFitnessApp(
@@ -171,6 +153,9 @@ fun MelodyFitnessApp(
                 paddingValues = paddingValues,
                 uiState = statsUiState,
                 weightUnit = settingsUiState.weightUnit,
+                onUpdateTimeRange = viewModel::updateTimeRange,
+                onUpdateActiveTab = viewModel::updateActiveTab,
+                onSelectExercise = viewModel::selectExercise,
             )
 
             Screen.SETTINGS -> SettingsScreen(
@@ -328,524 +313,6 @@ private fun HomeScreen(
                         )
                     }
                 }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun RecordScreen(
-    paddingValues: PaddingValues,
-    uiState: RecordUiState,
-    onSaveStrength: (StrengthWorkoutInput) -> Unit,
-    onSaveCardio: (CardioWorkoutInput) -> Unit,
-    onSaveBodyMetric: (BodyMetricInput) -> Unit,
-) {
-    var mode by rememberSaveable { mutableStateOf("strength") }
-    val snackbarHostState = remember { SnackbarHostState() }
-    val coroutineScope = rememberCoroutineScope()
-
-    var workoutTitle by rememberSaveable { mutableStateOf("") }
-    var workoutNotes by rememberSaveable { mutableStateOf("") }
-    val strengthExercises = remember { mutableStateListOf(StrengthExerciseDraft()) }
-
-    var cardioType by rememberSaveable { mutableStateOf("") }
-    var durationText by rememberSaveable { mutableStateOf("") }
-    var distanceText by rememberSaveable { mutableStateOf("") }
-    var paceText by rememberSaveable { mutableStateOf("") }
-    var cardioNotes by rememberSaveable { mutableStateOf("") }
-
-    var bodyWeightText by rememberSaveable { mutableStateOf("") }
-    var bodyFatText by rememberSaveable { mutableStateOf("") }
-    var waistText by rememberSaveable { mutableStateOf("") }
-    var sleepHoursText by rememberSaveable { mutableStateOf("") }
-    var fatigueScoreText by rememberSaveable { mutableStateOf("") }
-    var bodyNotes by rememberSaveable { mutableStateOf("") }
-
-    fun updateExercise(index: Int, transform: (StrengthExerciseDraft) -> StrengthExerciseDraft) {
-        strengthExercises[index] = transform(strengthExercises[index])
-    }
-
-    fun addExercise() {
-        strengthExercises.add(StrengthExerciseDraft())
-    }
-
-    fun removeExercise(index: Int) {
-        if (strengthExercises.size > 1) {
-            strengthExercises.removeAt(index)
-        }
-    }
-
-    fun addSet(exerciseIndex: Int) {
-        updateExercise(exerciseIndex) { exercise ->
-            val previousSet = exercise.sets.lastOrNull() ?: StrengthSetDraft()
-            exercise.copy(
-                sets = exercise.sets + StrengthSetDraft(
-                    weightText = previousSet.weightText,
-                    repsText = previousSet.repsText,
-                ),
-            )
-        }
-    }
-
-    fun applyTemplate(template: StrengthExerciseTemplate) {
-        val draftedExercise = StrengthExerciseDraft(
-            name = template.name,
-            sets = listOf(
-                StrengthSetDraft(
-                    weightText = formatFloat(template.lastWeightKg),
-                    repsText = template.lastReps.toString(),
-                ),
-            ),
-        )
-        if (strengthExercises.size == 1 &&
-            strengthExercises.first().name.isBlank() &&
-            strengthExercises.first().sets.size == 1 &&
-            strengthExercises.first().sets.first().weightText.isBlank() &&
-            strengthExercises.first().sets.first().repsText.isBlank()
-        ) {
-            strengthExercises[0] = draftedExercise
-        } else {
-            strengthExercises.add(draftedExercise)
-        }
-    }
-
-    fun removeSet(exerciseIndex: Int, setIndex: Int) {
-        updateExercise(exerciseIndex) { exercise ->
-            if (exercise.sets.size == 1) {
-                exercise
-            } else {
-                exercise.copy(
-                    sets = exercise.sets.filterIndexed { index, _ -> index != setIndex },
-                )
-            }
-        }
-    }
-
-    val isStrengthValid = strengthExercises.isNotEmpty() &&
-        strengthExercises.all { exercise ->
-            exercise.name.isNotBlank() &&
-                exercise.sets.isNotEmpty() &&
-                exercise.sets.all { set ->
-                    set.weightText.toFloatOrNull() != null && set.repsText.toIntOrNull() != null
-                }
-        }
-
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            SectionTitle(title = "记录中心")
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                WorkoutCatalog.recordModes.forEach { recordMode ->
-                    FilterChip(
-                        selected = mode == recordMode.id,
-                        onClick = { mode = recordMode.id },
-                        label = { Text(recordMode.label) },
-                    )
-                }
-            }
-
-            when (mode) {
-                "strength" -> {
-                    if (uiState.strengthTemplates.isNotEmpty()) {
-                        Text(
-                            text = "最近常用动作",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            uiState.strengthTemplates.take(6).forEach { template ->
-                                FilterChip(
-                                    selected = false,
-                                    onClick = { applyTemplate(template) },
-                                    label = {
-                                        Text(
-                                            "${template.name} · ${formatFloat(template.lastWeightKg)}kg x ${template.lastReps}",
-                                        )
-                                    },
-                                )
-                            }
-                        }
-                    }
-                    OutlinedTextField(
-                        value = workoutTitle,
-                        onValueChange = { workoutTitle = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("训练标题") },
-                        placeholder = { Text("例如：胸肩训练") },
-                    )
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        WorkoutCatalog.strengthTitlePresets.forEach { preset ->
-                            FilterChip(
-                                selected = workoutTitle == preset,
-                                onClick = { workoutTitle = preset },
-                                label = { Text(preset) },
-                            )
-                        }
-                    }
-                    OutlinedTextField(
-                        value = workoutNotes,
-                        onValueChange = { workoutNotes = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("训练备注") },
-                        placeholder = { Text("例如：整体状态不错，后段疲劳上升") },
-                    )
-
-                    strengthExercises.forEachIndexed { exerciseIndex, exercise ->
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surface,
-                            ),
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        text = "动作 ${exerciseIndex + 1}",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                    if (strengthExercises.size > 1) {
-                                        TextButton(onClick = { removeExercise(exerciseIndex) }) {
-                                            Text("删除动作")
-                                        }
-                                    }
-                                }
-                                OutlinedTextField(
-                                    value = exercise.name,
-                                    onValueChange = { name ->
-                                        updateExercise(exerciseIndex) { it.copy(name = name) }
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("动作名称") },
-                                    placeholder = { Text("例如：卧推") },
-                                )
-                                PresetExerciseChips(
-                                    title = "徒手基础",
-                                    presets = WorkoutCatalog.bodyweightExercisePresets,
-                                    selectedExerciseName = exercise.name,
-                                    onPresetSelected = { preset ->
-                                        updateExercise(exerciseIndex) { it.copy(name = preset) }
-                                    },
-                                )
-                                PresetExerciseChips(
-                                    title = "扣篮专项",
-                                    presets = WorkoutCatalog.dunkExercisePresets,
-                                    selectedExerciseName = exercise.name,
-                                    onPresetSelected = { preset ->
-                                        updateExercise(exerciseIndex) { it.copy(name = preset) }
-                                    },
-                                )
-                                exercise.sets.forEachIndexed { setIndex, set ->
-                                    Card(
-                                        colors = CardDefaults.cardColors(
-                                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                        ),
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(12.dp),
-                                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically,
-                                            ) {
-                                                Text(
-                                                    text = "第 ${setIndex + 1} 组",
-                                                    fontWeight = FontWeight.Medium,
-                                                )
-                                                if (exercise.sets.size > 1) {
-                                                    TextButton(
-                                                        onClick = { removeSet(exerciseIndex, setIndex) },
-                                                    ) {
-                                                        Text("删除组")
-                                                    }
-                                                }
-                                            }
-                                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                                OutlinedTextField(
-                                                    value = set.weightText,
-                                                    onValueChange = { weight ->
-                                                        updateExercise(exerciseIndex) { draft ->
-                                                            draft.copy(
-                                                                sets = draft.sets.mapIndexed { index, item ->
-                                                                    if (index == setIndex) {
-                                                                        item.copy(weightText = weight)
-                                                                    } else {
-                                                                        item
-                                                                    }
-                                                                },
-                                                            )
-                                                        }
-                                                    },
-                                                    modifier = Modifier.weight(1f),
-                                                    label = { Text("重量 kg") },
-                                                )
-                                                OutlinedTextField(
-                                                    value = set.repsText,
-                                                    onValueChange = { reps ->
-                                                        updateExercise(exerciseIndex) { draft ->
-                                                            draft.copy(
-                                                                sets = draft.sets.mapIndexed { index, item ->
-                                                                    if (index == setIndex) {
-                                                                        item.copy(repsText = reps)
-                                                                    } else {
-                                                                        item
-                                                                    }
-                                                                },
-                                                            )
-                                                        }
-                                                    },
-                                                    modifier = Modifier.weight(1f),
-                                                    label = { Text("次数") },
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                                TextButton(onClick = { addSet(exerciseIndex) }) {
-                                    Text("新增一组")
-                                }
-                            }
-                        }
-                    }
-
-                    TextButton(onClick = ::addExercise) {
-                        Text("新增一个动作")
-                    }
-                    Button(
-                        onClick = {
-                            onSaveStrength(
-                                StrengthWorkoutInput(
-                                    title = workoutTitle,
-                                    notes = workoutNotes,
-                                    exercises = strengthExercises.map { exercise ->
-                                        StrengthExerciseInput(
-                                            name = exercise.name,
-                                            sets = exercise.sets.map { set ->
-                                                StrengthSetInput(
-                                                    weightKg = set.weightText.toFloat(),
-                                                    reps = set.repsText.toInt(),
-                                                )
-                                            },
-                                        )
-                                    },
-                                ),
-                            )
-                            workoutTitle = ""
-                            workoutNotes = ""
-                            strengthExercises.clear()
-                            strengthExercises.add(StrengthExerciseDraft())
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar("多动作训练已保存到本地")
-                            }
-                        },
-                        enabled = isStrengthValid,
-                    ) {
-                        Text("保存力量训练")
-                    }
-                }
-
-                "cardio" -> {
-                    OutlinedTextField(
-                        value = cardioType,
-                        onValueChange = { cardioType = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("项目") },
-                        placeholder = { Text("例如：跑步") },
-                    )
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        WorkoutCatalog.cardioActivityPresets.forEach { preset ->
-                            FilterChip(
-                                selected = cardioType == preset,
-                                onClick = { cardioType = preset },
-                                label = { Text(preset) },
-                            )
-                        }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(
-                            value = durationText,
-                            onValueChange = { durationText = it },
-                            modifier = Modifier.weight(1f),
-                            label = { Text("时长 分钟") },
-                        )
-                        OutlinedTextField(
-                            value = distanceText,
-                            onValueChange = { distanceText = it },
-                            modifier = Modifier.weight(1f),
-                            label = { Text("距离 km") },
-                        )
-                    }
-                    OutlinedTextField(
-                        value = paceText,
-                        onValueChange = { paceText = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("配速 / 平均心率") },
-                        placeholder = { Text("例如：5'40\" 或 150 bpm") },
-                    )
-                    OutlinedTextField(
-                        value = cardioNotes,
-                        onValueChange = { cardioNotes = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("备注") },
-                    )
-                    Button(
-                        onClick = {
-                            onSaveCardio(
-                                CardioWorkoutInput(
-                                    activityType = cardioType,
-                                    durationMinutes = durationText.toInt(),
-                                    distanceKm = distanceText.toFloat(),
-                                    averagePace = paceText,
-                                    notes = cardioNotes,
-                                ),
-                            )
-                            cardioType = ""
-                            durationText = ""
-                            distanceText = ""
-                            paceText = ""
-                            cardioNotes = ""
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar("有氧训练已保存到本地")
-                            }
-                        },
-                        enabled = cardioType.isNotBlank() &&
-                            durationText.toIntOrNull() != null &&
-                            distanceText.toFloatOrNull() != null,
-                    ) {
-                        Text("保存有氧训练")
-                    }
-                }
-
-                else -> {
-                    OutlinedTextField(
-                        value = bodyWeightText,
-                        onValueChange = { bodyWeightText = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("体重 kg") },
-                    )
-                    OutlinedTextField(
-                        value = bodyFatText,
-                        onValueChange = { bodyFatText = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("体脂 %（可选）") },
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(
-                            value = waistText,
-                            onValueChange = { waistText = it },
-                            modifier = Modifier.weight(1f),
-                            label = { Text("腰围 cm（可选）") },
-                        )
-                        OutlinedTextField(
-                            value = sleepHoursText,
-                            onValueChange = { sleepHoursText = it },
-                            modifier = Modifier.weight(1f),
-                            label = { Text("睡眠 小时（可选）") },
-                        )
-                    }
-                    OutlinedTextField(
-                        value = fatigueScoreText,
-                        onValueChange = { fatigueScoreText = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("疲劳感 1-10（可选）") },
-                    )
-                    OutlinedTextField(
-                        value = bodyNotes,
-                        onValueChange = { bodyNotes = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("备注") },
-                        placeholder = { Text("例如：睡眠一般，恢复偏慢") },
-                    )
-                    Button(
-                        onClick = {
-                            onSaveBodyMetric(
-                                BodyMetricInput(
-                                    weightKg = bodyWeightText.toFloat(),
-                                    bodyFatPercentage = bodyFatText.toFloatOrNull(),
-                                    waistCm = waistText.toFloatOrNull(),
-                                    sleepHours = sleepHoursText.toFloatOrNull(),
-                                    fatigueScore = fatigueScoreText.toIntOrNull(),
-                                    notes = bodyNotes,
-                                ),
-                            )
-                            bodyWeightText = ""
-                            bodyFatText = ""
-                            waistText = ""
-                            sleepHoursText = ""
-                            fatigueScoreText = ""
-                            bodyNotes = ""
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar("身体状态已保存到本地")
-                            }
-                        },
-                        enabled = bodyWeightText.toFloatOrNull() != null &&
-                            (fatigueScoreText.isBlank() || fatigueScoreText.toIntOrNull() in 1..10),
-                    ) {
-                        Text("保存身体状态")
-                    }
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun PresetExerciseChips(
-    title: String,
-    presets: List<String>,
-    selectedExerciseName: String,
-    onPresetSelected: (String) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            presets.forEach { preset ->
-                FilterChip(
-                    selected = selectedExerciseName == preset,
-                    onClick = { onPresetSelected(preset) },
-                    label = { Text(preset) },
-                )
             }
         }
     }
@@ -1223,114 +690,6 @@ private fun GoalsScreen(
     }
 }
 
-@Composable
-private fun StatsScreen(
-    paddingValues: PaddingValues,
-    uiState: StatsUiState,
-    weightUnit: WeightUnit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(paddingValues)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        SectionTitle(title = "训练统计")
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            MetricCard(
-                modifier = Modifier.weight(1f),
-                title = "本周训练",
-                value = "${uiState.weeklyWorkoutCount} 次",
-            )
-            MetricCard(
-                modifier = Modifier.weight(1f),
-                title = "最新体重",
-                value = uiState.latestWeightKg?.let { formatWeight(it, weightUnit) } ?: "--",
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            MetricCard(
-                modifier = Modifier.weight(1f),
-                title = "有氧时长",
-                value = "${uiState.totalCardioMinutes} 分钟",
-            )
-            MetricCard(
-                modifier = Modifier.weight(1f),
-                title = "有氧距离",
-                value = "${formatFloat(uiState.totalCardioDistanceKm)} km",
-            )
-        }
-        MetricCard(
-            modifier = Modifier.fillMaxWidth(),
-            title = "力量最佳重量",
-            value = "${formatFloat(uiState.bestStrengthWeightKg)} kg",
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            MetricCard(
-                modifier = Modifier.weight(1f),
-                title = "较上次体重变化",
-                value = uiState.weightChangeSinceLastRecordKg?.let {
-                    val prefix = if (it > 0f) "+" else ""
-                    "$prefix${formatFloat(it)} kg"
-                } ?: "--",
-            )
-            MetricCard(
-                modifier = Modifier.weight(1f),
-                title = "最近睡眠",
-                value = uiState.latestSleepHours?.let { "${formatFloat(it)} 小时" } ?: "--",
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            MetricCard(
-                modifier = Modifier.weight(1f),
-                title = "最近腰围",
-                value = uiState.latestWaistCm?.let { "${formatFloat(it)} cm" } ?: "--",
-            )
-            MetricCard(
-                modifier = Modifier.weight(1f),
-                title = "疲劳感",
-                value = uiState.latestFatigueScore?.let { "$it / 10" } ?: "--",
-            )
-        }
-        uiState.latestBodyFatPercentage?.let {
-            MetricCard(
-                modifier = Modifier.fillMaxWidth(),
-                title = "最新体脂",
-                value = "${formatFloat(it)} %",
-            )
-        }
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-            ),
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = "下一步建议",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = when {
-                        uiState.latestFatigueScore != null && uiState.latestFatigueScore >= 8 ->
-                            "最近疲劳感偏高，下一次训练可以主动降一点容量，先把恢复拉回来。"
-                        uiState.latestSleepHours != null && uiState.latestSleepHours < 6f ->
-                            "最近睡眠偏少，先优先补睡眠，再观察体重和力量波动。"
-                        uiState.weeklyWorkoutCount < 3 -> "这周训练次数还不多，可以优先把频率补上。"
-                        uiState.totalCardioMinutes < 60 -> "有氧累计偏少，可以补一到两次 20-30 分钟中低强度训练。"
-                        else -> "本周训练节奏不错，继续观察体重和力量的联动变化。"
-                    },
-                )
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SettingsScreen(
@@ -1415,7 +774,7 @@ private fun SettingsScreen(
 }
 
 @Composable
-private fun SectionTitle(title: String) {
+fun SectionTitle(title: String) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             text = title,
@@ -1427,7 +786,7 @@ private fun SectionTitle(title: String) {
 }
 
 @Composable
-private fun EmptyCard(
+internal fun EmptyCard(
     title: String,
     body: String,
 ) {
@@ -1446,36 +805,7 @@ private fun EmptyCard(
     }
 }
 
-@Composable
-private fun MetricCard(
-    modifier: Modifier = Modifier,
-    title: String,
-    value: String,
-) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-        ),
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = title,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-            )
-        }
-    }
-}
-
-private fun formatFloat(value: Float): String {
+internal fun formatFloat(value: Float): String {
     return if (value % 1f == 0f) {
         value.toInt().toString()
     } else {
@@ -1483,7 +813,7 @@ private fun formatFloat(value: Float): String {
     }
 }
 
-private fun formatWeight(valueKg: Float, weightUnit: WeightUnit): String {
+internal fun formatWeight(valueKg: Float, weightUnit: WeightUnit): String {
     return when (weightUnit) {
         WeightUnit.KG -> "${formatFloat(valueKg)} kg"
         WeightUnit.LB -> "${formatFloat(valueKg * 2.20462f)} lb"

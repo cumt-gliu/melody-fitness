@@ -1,0 +1,76 @@
+<h2>Tab 3：力量进步</h2>
+<p class="subtitle">受时间筛选器控制，展示各动作的力量增长趋势</p>
+
+<div class="mockup">
+  <div class="mockup-body" style="padding:20px;display:flex;flex-direction:column;gap:16px">
+
+    <!-- 动作切换 Chip 行 -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <span style="background:#1f6f50;color:white;border-radius:20px;padding:6px 14px;font-size:13px">卧推</span>
+      <span style="background:#f0e8dc;color:#555;border-radius:20px;padding:6px 14px;font-size:13px">深蹲</span>
+      <span style="background:#f0e8dc;color:#555;border-radius:20px;padding:6px 14px;font-size:13px">硬拉</span>
+      <span style="background:#f0e8dc;color:#555;border-radius:20px;padding:6px 14px;font-size:13px">划船</span>
+      <span style="background:#f0e8dc;color:#555;border-radius:20px;padding:6px 14px;font-size:13px">推举</span>
+    </div>
+
+    <!-- 最佳记录行 -->
+    <div style="display:flex;gap:12px">
+      <div style="flex:1;background:#fffbf4;border-radius:12px;padding:12px;border:1px solid #e8e0d4;text-align:center">
+        <div style="font-size:11px;color:#8b8b8b">最佳重量</div>
+        <div style="font-size:22px;font-weight:bold;color:#1f6f50">75 kg</div>
+        <div style="font-size:11px;color:#8b8b8b">2026/4/15</div>
+      </div>
+      <div style="flex:1;background:#fffbf4;border-radius:12px;padding:12px;border:1px solid #e8e0d4;text-align:center">
+        <div style="font-size:11px;color:#8b8b8b">本次重量</div>
+        <div style="font-size:22px;font-weight:bold;color:#1f6f50">72.5 kg</div>
+        <div style="font-size:11px"><span style="color:#1f6f50">▲ +2.5 kg</span> vs 上期</div>
+      </div>
+      <div style="flex:1;background:#fffbf4;border-radius:12px;padding:12px;border:1px solid #e8e0d4;text-align:center">
+        <div style="font-size:11px;color:#8b8b8b">总容量</div>
+        <div style="font-size:22px;font-weight:bold;color:#1f6f50">1,450 kg</div>
+        <div style="font-size:11px"><span style="color:#1f6f50">▲ +180 kg</span></div>
+      </div>
+      <div style="flex:1;background:#fffbf4;border-radius:12px;padding:12px;border:1px solid #e8e0d4;text-align:center">
+        <div style="font-size:11px;color:#8b8b8b">组数</div>
+        <div style="font-size:22px;font-weight:bold;color:#1f6f50">12</div>
+        <div style="font-size:11px"><span style="color:#1f6f50">▲ +2</span> vs 上期</div>
+      </div>
+    </div>
+
+    <!-- 重量变化趋势图 -->
+    <div style="background:#fffbf4;border-radius:12px;padding:14px;border:1px solid #e8e0d4">
+      <div style="font-size:14px;font-weight:600;margin-bottom:8px">🏋️ 卧推重量趋势</div>
+      <svg width="100%" height="100" viewBox="0 0 500 100">
+        <!-- PR line -->
+        <polyline points="30,80 80,70 130,75 180,60 230,65 280,50 330,55 380,40 430,30" fill="none" stroke="#1f6f50" stroke-width="2.5"/>
+        <!-- PR dots -->
+        <circle cx="30" cy="80" r="3" fill="#1f6f50"/>
+        <circle cx="180" cy="60" r="3" fill="#1f6f50"/>
+        <circle cx="280" cy="50" r="3" fill="#1f6f50"/>
+        <circle cx="380" cy="40" r="3" fill="#1f6f50"/>
+        <circle cx="430" cy="30" r="5" fill="#b36a2c" stroke="white" stroke-width="2"/>
+        <!-- PR label -->
+        <text x="435" y="28" fill="#b36a2c" font-size="8">PR 75kg</text>
+      </svg>
+    </div>
+
+    <!-- 训练容量趋势 -->
+    <div style="background:#fffbf4;border-radius:12px;padding:14px;border:1px solid #e8e0d4">
+      <div style="font-size:14px;font-weight:600;margin-bottom:8px">📊 训练容量趋势（总重量）</div>
+      <svg width="100%" height="70" viewBox="0 0 500 70">
+        <polyline points="30,55 80,50 130,52 180,40 230,45 280,35 330,38 380,25 430,28" fill="none" stroke="#4e8a6c" stroke-width="2"/>
+      </svg>
+      <div style="font-size:12px;color:#8b8b8b">本期总容量 8,230 kg · 单次平均 1,175 kg</div>
+    </div>
+
+  </div>
+</div>
+
+<p><strong>需要新增的数据层：</strong></p>
+<ul>
+  <li>新 DAO 查询：按动作名称 + 时间段查询每次训练的重量变化</li>
+  <li>新 Repository 方法 + ViewModel 字段</li>
+  <li>其余布局使用现有数据</li>
+</ul>
+
+<p>力量进步 Tab 的内容设计如何？</p>

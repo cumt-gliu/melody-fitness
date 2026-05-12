@@ -1,0 +1,69 @@
+<h2>概览行：4 项核心指标</h2>
+<p class="subtitle">固定页面顶部，显示本周数据，不受时间筛选影响</p>
+
+<div class="mockup">
+  <div class="mockup-body" style="padding:20px">
+
+    <div style="display:flex;gap:12px">
+      <!-- 训练次数 -->
+      <div style="flex:1;background:#fffbf4;border-radius:12px;padding:14px;border:1px solid #e8e0d4;text-align:center">
+        <div style="font-size:12px;color:#8b8b8b;margin-bottom:4px">🏋️ 本周训练</div>
+        <div style="font-size:28px;font-weight:bold;color:#1f6f50">4 <span style="font-size:14px;font-weight:normal">次</span></div>
+        <div style="display:flex;justify-content:center;align-items:center;gap:6px;margin-top:4px">
+          <span style="color:#1f6f50;font-size:11px">⬆ +1</span>
+          <span style="color:#8b8b8b;font-size:11px">vs 上周 3</span>
+        </div>
+        <svg width="80" height="20" viewBox="0 0 80 20" style="margin-top:6px">
+          <polyline points="0,15 10,12 20,14 30,8 40,10 50,5 60,7 70,3" fill="none" stroke="#1f6f50" stroke-width="1.5" opacity="0.5"/>
+        </svg>
+      </div>
+      <!-- 有氧时长 -->
+      <div style="flex:1;background:#fffbf4;border-radius:12px;padding:14px;border:1px solid #e8e0d4;text-align:center">
+        <div style="font-size:12px;color:#8b8b8b;margin-bottom:4px">🏃 有氧时长</div>
+        <div style="font-size:28px;font-weight:bold;color:#1f6f50">85 <span style="font-size:14px;font-weight:normal">分钟</span></div>
+        <div style="display:flex;justify-content:center;align-items:center;gap:6px;margin-top:4px">
+          <span style="color:#b36a2c;font-size:11px">⬆ +15</span>
+          <span style="color:#8b8b8b;font-size:11px">vs 上周 70</span>
+        </div>
+        <svg width="80" height="20" viewBox="0 0 80 20" style="margin-top:6px">
+          <polyline points="0,18 10,16 20,17 30,12 40,14 50,8 60,10 70,6" fill="none" stroke="#1f6f50" stroke-width="1.5" opacity="0.5"/>
+        </svg>
+      </div>
+      <!-- 体重变化 -->
+      <div style="flex:1;background:#fffbf4;border-radius:12px;padding:14px;border:1px solid #e8e0d4;text-align:center">
+        <div style="font-size:12px;color:#8b8b8b;margin-bottom:4px">⚖️ 体重变化</div>
+        <div style="font-size:28px;font-weight:bold;color:#1f6f50">-0.8 <span style="font-size:14px;font-weight:normal">kg</span></div>
+        <div style="display:flex;justify-content:center;align-items:center;gap:6px;margin-top:4px">
+          <span style="color:#1f6f50;font-size:11px">⬇ 较上周</span>
+        </div>
+        <svg width="80" height="20" viewBox="0 0 80 20" style="margin-top:6px">
+          <polyline points="0,5 10,6 20,8 30,7 40,10 50,12 60,14 70,15" fill="none" stroke="#1f6f50" stroke-width="1.5" opacity="0.5"/>
+        </svg>
+      </div>
+      <!-- 训练天数 -->
+      <div style="flex:1;background:#fffbf4;border-radius:12px;padding:14px;border:1px solid #e8e0d4;text-align:center">
+        <div style="font-size:12px;color:#8b8b8b;margin-bottom:4px">📅 训练天数</div>
+        <div style="font-size:28px;font-weight:bold;color:#1f6f50">3 <span style="font-size:14px;font-weight:normal">天</span></div>
+        <div style="display:flex;justify-content:center;align-items:center;gap:6px;margin-top:4px">
+          <span style="color:#1f6f50;font-size:11px">⬆ +1</span>
+          <span style="color:#8b8b8b;font-size:11px">vs 上周 2</span>
+        </div>
+        <svg width="80" height="20" viewBox="0 0 80 20" style="margin-top:6px">
+          <polyline points="0,14 10,12 20,15 30,10 40,8 50,6 60,9 70,5" fill="none" stroke="#1f6f50" stroke-width="1.5" opacity="0.5"/>
+        </svg>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<p><strong>数据说明：</strong></p>
+<ul>
+  <li>「本周训练」= 本周一至今的训练次数，环比箭头显示 vs 上周同期差值</li>
+  <li>「有氧时长」= 本周有氧累计分钟数</li>
+  <li>「体重变化」= 最新体重 - 上周最新体重（负值绿色 = 减重，正值红色 = 增重）</li>
+  <li>「训练天数」= 本周有训练记录的天数</li>
+  <li>每个卡片底部包含一条迷你 sparkline（近 8 周变化趋势）</li>
+</ul>
+
+<p>概览行这个细节设计 ok 吗？</p>
