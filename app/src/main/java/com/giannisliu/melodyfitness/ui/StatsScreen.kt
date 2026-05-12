@@ -1,5 +1,11 @@
 package com.giannisliu.melodyfitness.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -95,10 +101,22 @@ fun StatsScreen(
             onSelect = onUpdateActiveTab,
         )
 
-        when (uiState.activeTab) {
-            StatsTab.TRAINING -> TrainingAnalysisTab(uiState)
-            StatsTab.BODY -> BodyMetricsTab(uiState, weightUnit)
-            StatsTab.STRENGTH -> StrengthProgressTab(uiState, onSelectExercise)
+        Crossfade(
+            targetState = uiState.selectedTimeRange,
+            animationSpec = tween(300),
+            label = "range-crossfade",
+        ) {
+            AnimatedContent(
+                targetState = uiState.activeTab,
+                transitionSpec = { fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300)) },
+                label = "tab-content",
+            ) { tab ->
+                when (tab) {
+                    StatsTab.TRAINING -> TrainingAnalysisTab(uiState)
+                    StatsTab.BODY -> BodyMetricsTab(uiState, weightUnit)
+                    StatsTab.STRENGTH -> StrengthProgressTab(uiState, onSelectExercise)
+                }
+            }
         }
 
         StatsAdviceCard(uiState)
