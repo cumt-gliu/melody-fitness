@@ -28,6 +28,21 @@ data class CardioWorkoutInput(
     val notes: String,
 )
 
+data class CardioEntryInput(
+    val activityType: String,
+    val durationMinutes: Int,
+    val distanceKm: Float,
+    val averagePace: String = "",
+    val notes: String = "",
+)
+
+data class WorkoutHistoryEditInput(
+    val title: String,
+    val notes: String,
+    val strengthExercises: List<StrengthExerciseInput>,
+    val cardioEntries: List<CardioEntryInput>,
+)
+
 data class BodyMetricInput(
     val weightKg: Float,
     val bodyFatPercentage: Float?,
@@ -179,6 +194,16 @@ data class WeeklyWorkoutCount(
     val count: Int,
 )
 
+data class WeeklyTrainingComparison(
+    val weekLabel: String,
+    val workoutCount: Int,
+    val trainingDays: Int,
+    val cardioMinutes: Int,
+    val workoutCountChange: Int?,
+    val trainingDaysChange: Int?,
+    val cardioMinutesChange: Int?,
+)
+
 data class SparklineData(
     val weeklyWorkoutCounts: List<Int> = emptyList(),
     val weeklyCardioMinutes: List<Int> = emptyList(),
@@ -194,6 +219,7 @@ interface FitnessRepository {
     fun observeStatsSnapshot(): Flow<StatsSnapshot>
     fun observeBodyMetricTrend(): Flow<List<BodyMetricTrendPoint>>
     fun observeWeeklyWorkoutCounts(weeks: Int): Flow<List<WeeklyWorkoutCount>>
+    fun observeWeeklyTrainingComparison(weeks: Int): Flow<List<WeeklyTrainingComparison>>
     fun observeSparklineData(): Flow<SparklineData>
     fun observeWeekOverWeekChanges(): Flow<WeekOverWeekChanges>
     fun observeCardioByDateRange(startDay: Long, endDay: Long): Flow<List<WorkoutTypeCount>>
@@ -209,6 +235,11 @@ interface FitnessRepository {
         workoutId: Long,
         title: String,
         notes: String,
+    )
+    suspend fun duplicateWorkoutHistoryItem(workoutId: Long)
+    suspend fun updateWorkoutHistoryDetails(
+        workoutId: Long,
+        input: WorkoutHistoryEditInput,
     )
     suspend fun deleteWorkoutHistoryItem(workoutId: Long)
 }

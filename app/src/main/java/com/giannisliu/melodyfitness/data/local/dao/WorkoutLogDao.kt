@@ -44,6 +44,12 @@ interface WorkoutLogDao {
         notes: String,
     )
 
+    @Query("DELETE FROM strength_exercises WHERE workoutLogId = :workoutId")
+    suspend fun deleteStrengthExercisesForWorkout(workoutId: Long)
+
+    @Query("DELETE FROM cardio_entries WHERE workoutLogId = :workoutId")
+    suspend fun deleteCardioEntriesForWorkout(workoutId: Long)
+
     @Query("DELETE FROM workout_logs WHERE id = :workoutId")
     suspend fun deleteWorkoutLogById(workoutId: Long)
 }

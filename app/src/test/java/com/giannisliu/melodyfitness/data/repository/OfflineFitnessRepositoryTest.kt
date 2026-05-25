@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
@@ -63,6 +64,94 @@ class OfflineFitnessRepositoryTest {
         val historyItem = repository.observeWorkoutHistory().first().single()
         assertEquals("推训练", historyItem.title)
         assertEquals("新备注", historyItem.notes)
+    }
+
+    @Test
+    fun duplicate_workout_history_item_creates_today_copy_with_details() = runBlocking {
+        val workoutDao = FakeWorkoutLogDao(
+            initialWorkouts = listOf(
+                fakeWorkout(
+                    id = 1L,
+                    title = "推训练",
+                    notes = "复制来源",
+                    exercises = listOf(
+                        fakeExercise(
+                            exerciseId = 11L,
+                            workoutLogId = 1L,
+                            name = "俯卧撑",
+                            sets = listOf(0f to 12, 0f to 10),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val repository = createRepository(workoutDao = workoutDao)
+
+        repository.duplicateWorkoutHistoryItem(workoutId = 1L)
+
+        val history = repository.observeWorkoutHistory().first()
+        assertEquals(2, history.size)
+        val copied = history.last()
+        assertEquals("推训练", copied.title)
+        assertEquals("复制来源", copied.notes)
+        assertEquals(LocalDate.now().format(DateTimeFormatter.ofPattern("M月d日")), copied.dateText)
+        assertEquals(listOf("俯卧撑"), copied.strengthExercises.map { it.name })
+        assertEquals(listOf(12, 10), copied.strengthExercises.single().sets.map { it.reps })
+    }
+
+    @Test
+    fun update_workout_history_details_replaces_strength_and_cardio_details() = runBlocking {
+        val workoutDao = FakeWorkoutLogDao(
+            initialWorkouts = listOf(
+                fakeWorkout(
+                    id = 1L,
+                    title = "旧训练",
+                    notes = "旧备注",
+                    exercises = listOf(
+                        fakeExercise(
+                            exerciseId = 11L,
+                            workoutLogId = 1L,
+                            name = "卧推",
+                            sets = listOf(60f to 8),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val repository = createRepository(workoutDao = workoutDao)
+
+        repository.updateWorkoutHistoryDetails(
+            workoutId = 1L,
+            input = WorkoutHistoryEditInput(
+                title = "新训练",
+                notes = "新备注",
+                strengthExercises = listOf(
+                    StrengthExerciseInput(
+                        name = "俯卧撑",
+                        sets = listOf(
+                            StrengthSetInput(weightKg = 0f, reps = 15),
+                            StrengthSetInput(weightKg = 0f, reps = 12),
+                        ),
+                    ),
+                ),
+                cardioEntries = listOf(
+                    CardioEntryInput(
+                        activityType = "跑步",
+                        durationMinutes = 20,
+                        distanceKm = 3f,
+                        averagePace = "6'40\"",
+                    ),
+                ),
+            ),
+        )
+
+        val updated = repository.observeWorkoutHistory().first().single()
+        assertEquals("新训练", updated.title)
+        assertEquals("新备注", updated.notes)
+        assertEquals(listOf("俯卧撑"), updated.strengthExercises.map { it.name })
+        assertEquals(listOf(15, 12), updated.strengthExercises.single().sets.map { it.reps })
+        assertEquals(listOf("跑步"), updated.cardioEntries.map { it.activityType })
+        assertEquals(20, updated.cardioEntries.single().durationMinutes)
     }
 
     @Test
@@ -314,6 +403,36 @@ class OfflineFitnessRepositoryTest {
         assertTrue("Should have training days", sparkline.weeklyTrainingDays.any { it > 0 })
     }
 
+    @Test
+    fun observe_weekly_training_comparison_aligns_multiple_week_metrics_oldest_to_newest() = runBlocking {
+        val today = LocalDate.now()
+        val thisWeekStart = today.with(DayOfWeek.MONDAY).toEpochDay()
+        val lastWeekStart = today.minusWeeks(1).with(DayOfWeek.MONDAY).toEpochDay()
+
+        val workoutDao = FakeWorkoutLogDao(
+            initialWorkouts = listOf(
+                fakeWorkoutWithCardio(id = 1L, dateEpochDay = lastWeekStart, cardioMinutes = 25),
+                fakeWorkout(id = 2L, title = "上周力量", notes = "", dateEpochDayOverride = lastWeekStart + 2),
+                fakeWorkoutWithCardio(id = 3L, dateEpochDay = thisWeekStart, cardioMinutes = 40),
+            ),
+        )
+        val repository = createRepository(workoutDao = workoutDao)
+
+        val comparison = repository.observeWeeklyTrainingComparison(weeks = 2).first()
+
+        assertEquals(2, comparison.size)
+        assertEquals("last week first", 2, comparison[0].workoutCount)
+        assertEquals(2, comparison[0].trainingDays)
+        assertEquals(25, comparison[0].cardioMinutes)
+        assertEquals(null, comparison[0].workoutCountChange)
+        assertEquals("this week second", 1, comparison[1].workoutCount)
+        assertEquals(1, comparison[1].trainingDays)
+        assertEquals(40, comparison[1].cardioMinutes)
+        assertEquals(-1, comparison[1].workoutCountChange)
+        assertEquals(-1, comparison[1].trainingDaysChange)
+        assertEquals(15, comparison[1].cardioMinutesChange)
+    }
+
     private fun fakeExercise(
         exerciseId: Long,
         workoutLogId: Long,
@@ -346,6 +465,7 @@ private class FakeWorkoutLogDao(
     initialWorkouts: List<WorkoutWithDetails> = emptyList(),
 ) : WorkoutLogDao {
     private val workouts = MutableStateFlow(initialWorkouts)
+    private val exerciseWorkoutIds = mutableMapOf<Long, Long>()
 
     override fun observeWorkoutLogs(): Flow<List<WorkoutWithDetails>> = workouts
 
@@ -364,13 +484,69 @@ private class FakeWorkoutLogDao(
         return MutableStateFlow(days)
     }
 
-    override suspend fun insertWorkoutLog(workoutLog: WorkoutLogEntity): Long = workoutLog.id
+    override suspend fun insertWorkoutLog(workoutLog: WorkoutLogEntity): Long {
+        val nextId = workoutLog.id.takeIf { it != 0L }
+            ?: ((workouts.value.maxOfOrNull { it.workoutLog.id } ?: 0L) + 1L)
+        workouts.value = workouts.value + WorkoutWithDetails(
+            workoutLog = workoutLog.copy(id = nextId),
+            strengthExercises = emptyList(),
+            cardioEntries = emptyList(),
+        )
+        return nextId
+    }
 
-    override suspend fun insertStrengthExercise(exercise: StrengthExerciseEntity): Long = exercise.id
+    override suspend fun insertStrengthExercise(exercise: StrengthExerciseEntity): Long {
+        val nextId = exercise.id.takeIf { it != 0L }
+            ?: ((workouts.value.flatMap { it.strengthExercises }.maxOfOrNull { it.exercise.id } ?: 0L) + 1L)
+        val copiedExercise = exercise.copy(id = nextId)
+        exerciseWorkoutIds[nextId] = exercise.workoutLogId
+        workouts.value = workouts.value.map { workout ->
+            if (workout.workoutLog.id == exercise.workoutLogId) {
+                workout.copy(
+                    strengthExercises = workout.strengthExercises + StrengthExerciseWithSets(
+                        exercise = copiedExercise,
+                        sets = emptyList(),
+                    ),
+                )
+            } else {
+                workout
+            }
+        }
+        return nextId
+    }
 
-    override suspend fun insertStrengthSets(sets: List<StrengthSetEntity>) = Unit
+    override suspend fun insertStrengthSets(sets: List<StrengthSetEntity>) {
+        if (sets.isEmpty()) return
+        val exerciseId = sets.first().exerciseId
+        val workoutId = exerciseWorkoutIds[exerciseId] ?: return
+        workouts.value = workouts.value.map { workout ->
+            if (workout.workoutLog.id == workoutId) {
+                workout.copy(
+                    strengthExercises = workout.strengthExercises.map { exercise ->
+                        if (exercise.exercise.id == exerciseId) {
+                            exercise.copy(sets = exercise.sets + sets)
+                        } else {
+                            exercise
+                        }
+                    },
+                )
+            } else {
+                workout
+            }
+        }
+    }
 
-    override suspend fun insertCardioEntry(cardioEntry: CardioEntryEntity) = Unit
+    override suspend fun insertCardioEntry(cardioEntry: CardioEntryEntity) {
+        val nextId = cardioEntry.id.takeIf { it != 0L }
+            ?: ((workouts.value.flatMap { it.cardioEntries }.maxOfOrNull { it.id } ?: 0L) + 1L)
+        workouts.value = workouts.value.map { workout ->
+            if (workout.workoutLog.id == cardioEntry.workoutLogId) {
+                workout.copy(cardioEntries = workout.cardioEntries + cardioEntry.copy(id = nextId))
+            } else {
+                workout
+            }
+        }
+    }
 
     override suspend fun updateWorkoutLogMetadata(
         workoutId: Long,
@@ -385,6 +561,27 @@ private class FakeWorkoutLogDao(
                         notes = notes,
                     ),
                 )
+            } else {
+                workout
+            }
+        }
+    }
+
+    override suspend fun deleteStrengthExercisesForWorkout(workoutId: Long) {
+        workouts.value = workouts.value.map { workout ->
+            if (workout.workoutLog.id == workoutId) {
+                workout.copy(strengthExercises = emptyList())
+            } else {
+                workout
+            }
+        }
+        exerciseWorkoutIds.entries.removeIf { it.value == workoutId }
+    }
+
+    override suspend fun deleteCardioEntriesForWorkout(workoutId: Long) {
+        workouts.value = workouts.value.map { workout ->
+            if (workout.workoutLog.id == workoutId) {
+                workout.copy(cardioEntries = emptyList())
             } else {
                 workout
             }

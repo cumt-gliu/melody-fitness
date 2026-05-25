@@ -192,30 +192,63 @@ class OfflineFitnessRepository(
     }
 
     override fun observeWeeklyWorkoutCounts(weeks: Int): Flow<List<WeeklyWorkoutCount>> {
-        return statsDao.observeWorkoutDates().map { dates ->
-            val today = LocalDate.now()
-            val weekField = WeekFields.of(Locale.getDefault()).weekOfWeekBasedYear()
-            val todayYearWeek = today.year * 100 + today.get(weekField)
-            val cutoff = today.minusWeeks(weeks.toLong()).toEpochDay()
+        return observeWeeklyTrainingComparison(weeks).map { comparisons ->
+            comparisons.map { comparison ->
+                WeeklyWorkoutCount(
+                    weekLabel = comparison.weekLabel,
+                    count = comparison.workoutCount,
+                )
+            }
+        }
+    }
 
-            val weeklyMap = mutableMapOf<Int, MutableList<LocalDate>>()
-            dates.filter { it >= cutoff }.forEach { epochDay ->
-                val date = LocalDate.ofEpochDay(epochDay)
-                val yw = date.year * 100 + date.get(weekField)
-                weeklyMap.getOrPut(yw) { mutableListOf() }.add(date)
+    override fun observeWeeklyTrainingComparison(weeks: Int): Flow<List<WeeklyTrainingComparison>> {
+        return workoutLogDao.observeWorkoutLogs().map { workouts ->
+            val today = LocalDate.now()
+            val weekStarts = (weeks - 1 downTo 0).map { weekAgo ->
+                startOfWeek(today.minusWeeks(weekAgo.toLong()))
+            }
+            val weekStartEpochs = weekStarts.map { it.toEpochDay() }
+
+            val workoutsByWeek = mutableMapOf<Long, Int>()
+            val trainingDaysByWeek = mutableMapOf<Long, MutableSet<Long>>()
+            val cardioMinutesByWeek = mutableMapOf<Long, Int>()
+
+            workouts.forEach { workout ->
+                val workoutDay = workout.workoutLog.dateEpochDay
+                val weekStart = startOfWeek(LocalDate.ofEpochDay(workoutDay)).toEpochDay()
+                if (weekStart !in weekStartEpochs) return@forEach
+
+                workoutsByWeek[weekStart] = (workoutsByWeek[weekStart] ?: 0) + 1
+                trainingDaysByWeek.getOrPut(weekStart) { mutableSetOf() }.add(workoutDay)
+                cardioMinutesByWeek[weekStart] = (cardioMinutesByWeek[weekStart] ?: 0) +
+                    workout.cardioEntries.sumOf { it.durationMinutes }
             }
 
-            (weeks - 1 downTo 0).map { weekAgo ->
-                val weekStart = today.minusWeeks(weekAgo.toLong())
-                val yw = weekStart.year * 100 + weekStart.get(weekField)
-                val count = weeklyMap[yw]?.size ?: 0
-                val month = weekStart.monthValue
-                val day = weekStart.dayOfMonth
-                WeeklyWorkoutCount(
-                    weekLabel = "${month}/${day}",
-                    count = count,
+            weekStarts.mapIndexed { index, weekStart ->
+                val weekStartEpoch = weekStart.toEpochDay()
+                val workoutCount = workoutsByWeek[weekStartEpoch] ?: 0
+                val trainingDays = trainingDaysByWeek[weekStartEpoch]?.size ?: 0
+                val cardioMinutes = cardioMinutesByWeek[weekStartEpoch] ?: 0
+                val previous = index.takeIf { it > 0 }?.let { previousIndex ->
+                    val previousEpoch = weekStarts[previousIndex - 1].toEpochDay()
+                    Triple(
+                        workoutsByWeek[previousEpoch] ?: 0,
+                        trainingDaysByWeek[previousEpoch]?.size ?: 0,
+                        cardioMinutesByWeek[previousEpoch] ?: 0,
+                    )
+                }
+
+                WeeklyTrainingComparison(
+                    weekLabel = "${weekStart.monthValue}/${weekStart.dayOfMonth}",
+                    workoutCount = workoutCount,
+                    trainingDays = trainingDays,
+                    cardioMinutes = cardioMinutes,
+                    workoutCountChange = previous?.let { workoutCount - it.first },
+                    trainingDaysChange = previous?.let { trainingDays - it.second },
+                    cardioMinutesChange = previous?.let { cardioMinutes - it.third },
                 )
-            }.reversed()
+            }
         }
     }
 
@@ -444,6 +477,105 @@ class OfflineFitnessRepository(
         )
     }
 
+    override suspend fun updateWorkoutHistoryDetails(
+        workoutId: Long,
+        input: WorkoutHistoryEditInput,
+    ) {
+        workoutLogDao.updateWorkoutLogMetadata(
+            workoutId = workoutId,
+            title = input.title,
+            notes = input.notes,
+        )
+        workoutLogDao.deleteCardioEntriesForWorkout(workoutId)
+        workoutLogDao.deleteStrengthExercisesForWorkout(workoutId)
+
+        input.strengthExercises.forEachIndexed { exerciseIndex, exercise ->
+            val exerciseId = workoutLogDao.insertStrengthExercise(
+                StrengthExerciseEntity(
+                    workoutLogId = workoutId,
+                    name = exercise.name,
+                    notes = exercise.notes,
+                    displayOrder = exerciseIndex,
+                ),
+            )
+            workoutLogDao.insertStrengthSets(
+                exercise.sets.mapIndexed { setIndex, set ->
+                    StrengthSetEntity(
+                        exerciseId = exerciseId,
+                        setOrder = setIndex + 1,
+                        weightKg = set.weightKg,
+                        reps = set.reps,
+                        notes = set.notes,
+                    )
+                },
+            )
+        }
+
+        input.cardioEntries.forEach { cardio ->
+            workoutLogDao.insertCardioEntry(
+                CardioEntryEntity(
+                    workoutLogId = workoutId,
+                    activityType = cardio.activityType,
+                    durationMinutes = cardio.durationMinutes,
+                    distanceKm = cardio.distanceKm,
+                    averagePace = cardio.averagePace,
+                    notes = cardio.notes,
+                ),
+            )
+        }
+    }
+
+    override suspend fun duplicateWorkoutHistoryItem(workoutId: Long) {
+        val source = workoutLogDao.observeWorkoutLogs().first()
+            .firstOrNull { it.workoutLog.id == workoutId }
+            ?: return
+
+        val now = System.currentTimeMillis()
+        val copiedWorkoutId = workoutLogDao.insertWorkoutLog(
+            WorkoutLogEntity(
+                dateEpochDay = LocalDate.now().toEpochDay(),
+                title = source.workoutLog.title,
+                notes = source.workoutLog.notes,
+                createdAtMillis = now,
+            ),
+        )
+
+        source.strengthExercises.sortedBy { it.exercise.displayOrder }.forEachIndexed { exerciseIndex, exercise ->
+            val copiedExerciseId = workoutLogDao.insertStrengthExercise(
+                StrengthExerciseEntity(
+                    workoutLogId = copiedWorkoutId,
+                    name = exercise.exercise.name,
+                    notes = exercise.exercise.notes,
+                    displayOrder = exerciseIndex,
+                ),
+            )
+            workoutLogDao.insertStrengthSets(
+                exercise.sets.sortedBy { it.setOrder }.mapIndexed { setIndex, set ->
+                    StrengthSetEntity(
+                        exerciseId = copiedExerciseId,
+                        setOrder = setIndex + 1,
+                        weightKg = set.weightKg,
+                        reps = set.reps,
+                        notes = set.notes,
+                    )
+                },
+            )
+        }
+
+        source.cardioEntries.forEach { cardio ->
+            workoutLogDao.insertCardioEntry(
+                CardioEntryEntity(
+                    workoutLogId = copiedWorkoutId,
+                    activityType = cardio.activityType,
+                    durationMinutes = cardio.durationMinutes,
+                    distanceKm = cardio.distanceKm,
+                    averagePace = cardio.averagePace,
+                    notes = cardio.notes,
+                ),
+            )
+        }
+    }
+
     override suspend fun deleteWorkoutHistoryItem(workoutId: Long) {
         workoutLogDao.deleteWorkoutLogById(workoutId)
     }
@@ -451,9 +583,13 @@ class OfflineFitnessRepository(
     private fun LocalDate.toYearWeek(weekField: java.time.temporal.TemporalField = WeekFields.of(Locale.getDefault()).weekOfWeekBasedYear()): Int =
         year * 100 + get(weekField)
 
+    private fun startOfWeek(date: LocalDate): LocalDate {
+        val delta = (date.dayOfWeek.value - DayOfWeek.MONDAY.value + 7) % 7
+        return date.minusDays(delta.toLong())
+    }
+
     private fun startOfWeekEpochDay(today: LocalDate = LocalDate.now()): Long {
-        val delta = (today.dayOfWeek.value - DayOfWeek.MONDAY.value + 7) % 7
-        return today.minusDays(delta.toLong()).toEpochDay()
+        return startOfWeek(today).toEpochDay()
     }
 
     private fun String.toGoalType(): GoalType {

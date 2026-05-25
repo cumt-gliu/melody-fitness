@@ -58,6 +58,7 @@ import com.giannisliu.melodyfitness.data.repository.CardioDurationPoint
 import com.giannisliu.melodyfitness.data.repository.StrengthTrendPoint
 import com.giannisliu.melodyfitness.data.repository.SparklineData
 import com.giannisliu.melodyfitness.data.repository.WeekOverWeekChanges
+import com.giannisliu.melodyfitness.data.repository.WeeklyTrainingComparison
 import com.giannisliu.melodyfitness.data.repository.WeeklyWorkoutCount
 import com.giannisliu.melodyfitness.data.repository.WeightUnit
 import com.giannisliu.melodyfitness.data.repository.WorkoutTypeCount
@@ -175,50 +176,54 @@ private fun OverviewRow(
     onCardClick: (StatsTab) -> Unit,
     sparklineData: SparklineData,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        OverviewCard(
-            modifier = Modifier.weight(1f),
-            title = "本周训练",
-            value = "$weeklyWorkoutCount 次",
-            change = wow.workoutCountChange,
-            compareLabel = "vs 上周 ${wow.previousWeekWorkoutCount}",
-            onClick = { onCardClick(StatsTab.TRAINING) },
-            sparklineData = sparklineData.weeklyWorkoutCounts.map { it.toFloat() },
-            sparklineType = SparklineType.BAR,
-        )
-        OverviewCard(
-            modifier = Modifier.weight(1f),
-            title = "有氧时长",
-            value = "${totalCardioMinutes}分钟",
-            change = wow.cardioMinutesChange,
-            compareLabel = "vs 上周 ${wow.previousWeekCardioMinutes}",
-            onClick = { onCardClick(StatsTab.TRAINING) },
-            sparklineData = sparklineData.weeklyCardioMinutes.map { it.toFloat() },
-            sparklineType = SparklineType.LINE,
-        )
-        OverviewCard(
-            modifier = Modifier.weight(1f),
-            title = "体重变化",
-            value = latestWeightKg?.let {
-                formatWeightChange(it, wow.weightChange, WeightUnit.KG)
-            } ?: "--",
-            change = null,
-            compareLabel = "较上周",
-            onClick = { onCardClick(StatsTab.BODY) },
-            sparklineData = sparklineData.weeklyWeights,
-            sparklineType = SparklineType.LINE,
-            lineColor = Color(0xFFb36a2c),
-        )
-        OverviewCard(
-            modifier = Modifier.weight(1f),
-            title = "训练天数",
-            value = "${wow.previousWeekTrainingDays + (wow.trainingDaysChange ?: 0)} 天",
-            change = wow.trainingDaysChange,
-            compareLabel = "vs 上周 ${wow.previousWeekTrainingDays}",
-            onClick = { onCardClick(StatsTab.TRAINING) },
-            sparklineData = sparklineData.weeklyTrainingDays.map { it.toFloat() },
-            sparklineType = SparklineType.LINE,
-        )
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OverviewCard(
+                modifier = Modifier.weight(1f),
+                title = "本周训练",
+                value = "$weeklyWorkoutCount 次",
+                change = wow.workoutCountChange,
+                compareLabel = "vs 上周 ${wow.previousWeekWorkoutCount}",
+                onClick = { onCardClick(StatsTab.TRAINING) },
+                sparklineData = sparklineData.weeklyWorkoutCounts.map { it.toFloat() },
+                sparklineType = SparklineType.BAR,
+            )
+            OverviewCard(
+                modifier = Modifier.weight(1f),
+                title = "有氧时长",
+                value = "${totalCardioMinutes}分钟",
+                change = wow.cardioMinutesChange,
+                compareLabel = "vs 上周 ${wow.previousWeekCardioMinutes}",
+                onClick = { onCardClick(StatsTab.TRAINING) },
+                sparklineData = sparklineData.weeklyCardioMinutes.map { it.toFloat() },
+                sparklineType = SparklineType.LINE,
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OverviewCard(
+                modifier = Modifier.weight(1f),
+                title = "体重变化",
+                value = latestWeightKg?.let {
+                    formatWeightChange(it, wow.weightChange, WeightUnit.KG)
+                } ?: "--",
+                change = null,
+                compareLabel = "较上周",
+                onClick = { onCardClick(StatsTab.BODY) },
+                sparklineData = sparklineData.weeklyWeights,
+                sparklineType = SparklineType.LINE,
+                lineColor = Color(0xFFb36a2c),
+            )
+            OverviewCard(
+                modifier = Modifier.weight(1f),
+                title = "训练天数",
+                value = "${wow.previousWeekTrainingDays + (wow.trainingDaysChange ?: 0)} 天",
+                change = wow.trainingDaysChange,
+                compareLabel = "vs 上周 ${wow.previousWeekTrainingDays}",
+                onClick = { onCardClick(StatsTab.TRAINING) },
+                sparklineData = sparklineData.weeklyTrainingDays.map { it.toFloat() },
+                sparklineType = SparklineType.LINE,
+            )
+        }
     }
 }
 
@@ -317,6 +322,10 @@ private fun StatsTabRow(
 @Composable
 private fun TrainingAnalysisTab(uiState: StatsUiState) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        WeeklyTrainingComparisonCard(
+            comparisons = uiState.weeklyTrainingComparison,
+        )
+
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             TrainingFrequencyBars(
                 modifier = Modifier.weight(1f),
@@ -330,6 +339,163 @@ private fun TrainingAnalysisTab(uiState: StatsUiState) {
         CardioDurationChart(
             trend = uiState.cardioDurationTrend,
         )
+    }
+}
+
+@Composable
+private fun WeeklyTrainingComparisonCard(
+    comparisons: List<WeeklyTrainingComparison>,
+    modifier: Modifier = Modifier,
+) {
+    if (comparisons.isEmpty()) {
+        EmptyChartCard(title = "近 8 周对比", message = "暂无训练数据")
+        return
+    }
+
+    val activeWeeks = comparisons.count {
+        it.workoutCount > 0 || it.trainingDays > 0 || it.cardioMinutes > 0
+    }
+    val latest = comparisons.lastOrNull()
+    val previous = comparisons.getOrNull(comparisons.lastIndex - 1)
+
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("近 8 周对比", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                latest?.let {
+                    Text(
+                        text = "最近 ${it.workoutCount} 次 / ${it.trainingDays} 天",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+            }
+
+            if (latest != null && previous != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    WeeklyComparisonSummary(
+                        modifier = Modifier.weight(1f),
+                        label = "训练",
+                        value = "${latest.workoutCount} 次",
+                        previousValue = "上周 ${previous.workoutCount}",
+                        change = latest.workoutCountChange,
+                    )
+                    WeeklyComparisonSummary(
+                        modifier = Modifier.weight(1f),
+                        label = "天数",
+                        value = "${latest.trainingDays} 天",
+                        previousValue = "上周 ${previous.trainingDays}",
+                        change = latest.trainingDaysChange,
+                    )
+                    WeeklyComparisonSummary(
+                        modifier = Modifier.weight(1f),
+                        label = "有氧",
+                        value = "${latest.cardioMinutes} 分",
+                        previousValue = "上周 ${previous.cardioMinutes}",
+                        change = latest.cardioMinutesChange,
+                    )
+                }
+            }
+
+            WeeklyComparisonBars(comparisons = comparisons)
+
+            Text(
+                text = "近 8 周活跃 $activeWeeks 周 · 合计 ${comparisons.sumOf { it.workoutCount }} 次训练 · ${comparisons.sumOf { it.cardioMinutes }} 分钟有氧",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+    }
+}
+
+@Composable
+private fun WeeklyComparisonSummary(
+    label: String,
+    value: String,
+    previousValue: String,
+    change: Int?,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(
+            text = "${formatSignedChange(change)} · $previousValue",
+            color = comparisonChangeColor(change),
+            style = MaterialTheme.typography.labelSmall,
+        )
+    }
+}
+
+@Composable
+private fun WeeklyComparisonBars(comparisons: List<WeeklyTrainingComparison>) {
+    val maxWorkoutCount = comparisons.maxOfOrNull { it.workoutCount }?.coerceAtLeast(1) ?: 1
+
+    Row(
+        modifier = Modifier.fillMaxWidth().height(96.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        comparisons.forEachIndexed { index, comparison ->
+            val isLatest = index == comparisons.lastIndex
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = comparison.workoutCount.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isLatest) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = if (isLatest) FontWeight.Bold else FontWeight.Normal,
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    contentAlignment = Alignment.BottomCenter,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.65f)
+                            .height(((comparison.workoutCount.toFloat() / maxWorkoutCount) * 52).dp.coerceAtLeast(4.dp))
+                            .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                            .background(
+                                if (isLatest) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.secondaryContainer,
+                            ),
+                    )
+                }
+                Text(
+                    text = comparison.weekLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+private fun formatSignedChange(change: Int?): String {
+    if (change == null) return "-"
+    if (change == 0) return "持平"
+    val prefix = if (change > 0) "+" else ""
+    return "$prefix$change"
+}
+
+@Composable
+private fun comparisonChangeColor(change: Int?): Color {
+    return when {
+        change == null || change == 0 -> MaterialTheme.colorScheme.onSurfaceVariant
+        change > 0 -> Color(0xFF1f6f50)
+        else -> Color(0xFFc0392b)
     }
 }
 

@@ -4,7 +4,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -15,9 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -26,7 +23,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -45,20 +41,19 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.giannisliu.melodyfitness.data.repository.BodyMetricInput
 import com.giannisliu.melodyfitness.data.repository.CardioWorkoutInput
 import com.giannisliu.melodyfitness.data.repository.StrengthExerciseInput
 import com.giannisliu.melodyfitness.data.repository.StrengthExerciseTemplate
-import com.giannisliu.melodyfitness.data.repository.StrengthSetInput
 import com.giannisliu.melodyfitness.data.repository.StrengthWorkoutInput
 import com.giannisliu.melodyfitness.domain.WorkoutCatalog
 import kotlinx.coroutines.launch
 
 private enum class RecordMode(val label: String) {
     STRENGTH("力量训练"),
+    BODYWEIGHT("自重训练"),
     CARDIO("有氧训练"),
     BODY("身体状态"),
 }
@@ -66,6 +61,7 @@ private enum class RecordMode(val label: String) {
 private data class StrengthSetDraft(
     val weightText: String = "",
     val repsText: String = "",
+    val isBodyweight: Boolean = false,
 )
 
 private data class StrengthExerciseDraft(
@@ -139,6 +135,17 @@ fun RecordScreen(
                     },
                 )
 
+                RecordMode.BODYWEIGHT -> StrengthWorkoutForm(
+                    templates = uiState.strengthTemplates,
+                    defaultTitle = "徒手训练",
+                    bodyweightMode = true,
+                    onDirtyChanged = { isDirty = it },
+                    onSave = { input ->
+                        onSaveStrength(input)
+                        isDirty = false
+                    },
+                )
+
                 RecordMode.CARDIO -> CardioWorkoutForm(
                     onDirtyChanged = { isDirty = it },
                     onSave = { input ->
@@ -199,15 +206,23 @@ fun RecordScreen(
 @Composable
 private fun StrengthWorkoutForm(
     templates: List<StrengthExerciseTemplate>,
+    defaultTitle: String = "",
+    bodyweightMode: Boolean = false,
     onDirtyChanged: (Boolean) -> Unit,
     onSave: (StrengthWorkoutInput) -> Unit,
 ) {
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    var workoutTitle by rememberSaveable { mutableStateOf("") }
+    var workoutTitle by rememberSaveable { mutableStateOf(defaultTitle) }
     var workoutNotes by rememberSaveable { mutableStateOf("") }
-    val strengthExercises = remember { mutableStateListOf(StrengthExerciseDraft()) }
+    val strengthExercises = remember {
+        mutableStateListOf(
+            StrengthExerciseDraft(
+                sets = listOf(StrengthSetDraft(isBodyweight = bodyweightMode)),
+            ),
+        )
+    }
 
     fun markDirty() {
         onDirtyChanged(true)
@@ -219,7 +234,11 @@ private fun StrengthWorkoutForm(
     }
 
     fun addExercise() {
-        strengthExercises.add(StrengthExerciseDraft())
+        strengthExercises.add(
+            StrengthExerciseDraft(
+                sets = listOf(StrengthSetDraft(isBodyweight = bodyweightMode)),
+            ),
+        )
         markDirty()
     }
 
@@ -237,18 +256,21 @@ private fun StrengthWorkoutForm(
                 sets = exercise.sets + StrengthSetDraft(
                     weightText = previousSet.weightText,
                     repsText = previousSet.repsText,
+                    isBodyweight = previousSet.isBodyweight,
                 ),
             )
         }
     }
 
     fun applyTemplate(template: StrengthExerciseTemplate) {
+        val isBodyweight = template.lastWeightKg == 0f || isBodyweightExerciseName(template.name)
         val draftedExercise = StrengthExerciseDraft(
             name = template.name,
             sets = listOf(
                 StrengthSetDraft(
-                    weightText = formatFloat(template.lastWeightKg),
+                    weightText = if (isBodyweight) "" else formatFloat(template.lastWeightKg),
                     repsText = template.lastReps.toString(),
+                    isBodyweight = isBodyweight,
                 ),
             ),
         )
@@ -273,24 +295,28 @@ private fun StrengthWorkoutForm(
     }
 
     fun resetForm() {
-        workoutTitle = ""
+        workoutTitle = defaultTitle
         workoutNotes = ""
         strengthExercises.clear()
-        strengthExercises.add(StrengthExerciseDraft())
+        strengthExercises.add(
+            StrengthExerciseDraft(
+                sets = listOf(StrengthSetDraft(isBodyweight = bodyweightMode)),
+            ),
+        )
         onDirtyChanged(false)
     }
 
     val hasEmptyName = strengthExercises.any { it.name.isBlank() }
     val hasInvalidSet = strengthExercises.any { exercise ->
         exercise.sets.any { set ->
-            set.weightText.toFloatOrNull() == null || set.repsText.toIntOrNull() == null
+            parseStrengthSetInput(set.toFormState()) == null
         }
     }
     val isValid = strengthExercises.isNotEmpty() && !hasEmptyName && !hasInvalidSet
 
     val validationMessage = when {
         hasEmptyName -> "请填写所有动作名称"
-        hasInvalidSet -> "请填写每组的重量和次数"
+        hasInvalidSet -> "请填写每组的次数；非自重组还需要重量"
         else -> null
     }
 
@@ -306,8 +332,21 @@ private fun StrengthWorkoutForm(
                     .padding(horizontal = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
+                if (bodyweightMode) {
+                    Text(
+                        text = "选择动作后只需要填次数或秒数；有负重时再填负重 kg。",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+
                 // Templates
-                if (templates.isNotEmpty()) {
+                val visibleTemplates = if (bodyweightMode) {
+                    templates.filter { it.lastWeightKg == 0f || isBodyweightExerciseName(it.name) }
+                } else {
+                    templates
+                }
+                if (visibleTemplates.isNotEmpty()) {
                     Text(
                         text = "最近常用动作",
                         style = MaterialTheme.typography.titleSmall,
@@ -317,7 +356,7 @@ private fun StrengthWorkoutForm(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        templates.take(6).forEach { template ->
+                        visibleTemplates.take(6).forEach { template ->
                             AssistChip(
                                 onClick = { applyTemplate(template) },
                                 label = {
@@ -342,7 +381,12 @@ private fun StrengthWorkoutForm(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    WorkoutCatalog.strengthTitlePresets.forEach { preset ->
+                    val titlePresets = if (bodyweightMode) {
+                        listOf("徒手训练", "核心训练", "弹跳训练", "扣篮专项", "爆发力训练")
+                    } else {
+                        WorkoutCatalog.strengthTitlePresets
+                    }
+                    titlePresets.forEach { preset ->
                         FilterChip(
                             selected = workoutTitle == preset,
                             onClick = { workoutTitle = preset; markDirty() },
@@ -402,7 +446,14 @@ private fun StrengthWorkoutForm(
                                 presets = WorkoutCatalog.bodyweightExercisePresets,
                                 selectedExerciseName = exercise.name,
                                 onPresetSelected = { preset ->
-                                    updateExercise(exerciseIndex) { it.copy(name = preset) }
+                                    updateExercise(exerciseIndex) {
+                                        it.copy(
+                                            name = preset,
+                                            sets = it.sets.map { set ->
+                                                set.copy(weightText = "", isBodyweight = true)
+                                            },
+                                        )
+                                    }
                                 },
                             )
                             PresetExerciseChips(
@@ -410,7 +461,14 @@ private fun StrengthWorkoutForm(
                                 presets = WorkoutCatalog.dunkExercisePresets,
                                 selectedExerciseName = exercise.name,
                                 onPresetSelected = { preset ->
-                                    updateExercise(exerciseIndex) { it.copy(name = preset) }
+                                    updateExercise(exerciseIndex) {
+                                        it.copy(
+                                            name = preset,
+                                            sets = it.sets.map { set ->
+                                                set.copy(weightText = "", isBodyweight = true)
+                                            },
+                                        )
+                                    }
                                 },
                             )
 
@@ -455,8 +513,10 @@ private fun StrengthWorkoutForm(
                                                     }
                                                 },
                                                 modifier = Modifier.weight(1f),
-                                                label = { Text("重量 kg") },
-                                                isError = set.weightText.isNotBlank() && set.weightText.toFloatOrNull() == null,
+                                                label = { Text(if (set.isBodyweight) "负重 kg（可选）" else "重量 kg") },
+                                                placeholder = { Text(if (set.isBodyweight) "自重" else "例如：60") },
+                                                isError = set.weightText.isNotBlank() &&
+                                                    set.weightText.toFloatOrNull() == null,
                                             )
                                             OutlinedTextField(
                                                 value = set.repsText,
@@ -470,10 +530,35 @@ private fun StrengthWorkoutForm(
                                                     }
                                                 },
                                                 modifier = Modifier.weight(1f),
-                                                label = { Text("次数") },
-                                                isError = set.repsText.isNotBlank() && set.repsText.toIntOrNull() == null,
+                                                label = { Text("次数 / 秒数") },
+                                                isError = set.repsText.isNotBlank() &&
+                                                    (set.repsText.toIntOrNull()?.takeIf { it > 0 } == null),
                                             )
                                         }
+                                        FilterChip(
+                                            selected = set.isBodyweight,
+                                            onClick = {
+                                                updateExercise(exerciseIndex) { draft ->
+                                                    draft.copy(
+                                                        sets = draft.sets.mapIndexed { i, item ->
+                                                            if (i == setIndex) {
+                                                                item.copy(
+                                                                    weightText = if (item.isBodyweight) item.weightText else "",
+                                                                    isBodyweight = !item.isBodyweight,
+                                                                )
+                                                            } else {
+                                                                item
+                                                            }
+                                                        },
+                                                    )
+                                                }
+                                            },
+                                            label = { Text(if (set.isBodyweight) "自重组" else "改为自重") },
+                                            colors = FilterChipDefaults.filterChipColors(
+                                                selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            ),
+                                        )
                                     }
                                 }
                             }
@@ -521,10 +606,7 @@ private fun StrengthWorkoutForm(
                                         StrengthExerciseInput(
                                             name = exercise.name,
                                             sets = exercise.sets.map { set ->
-                                                StrengthSetInput(
-                                                    weightKg = set.weightText.toFloat(),
-                                                    reps = set.repsText.toInt(),
-                                                )
+                                                requireNotNull(parseStrengthSetInput(set.toFormState()))
                                             },
                                         )
                                     },
@@ -544,6 +626,14 @@ private fun StrengthWorkoutForm(
             }
         }
     }
+}
+
+private fun StrengthSetDraft.toFormState(): StrengthSetFormState {
+    return StrengthSetFormState(
+        weightText = weightText,
+        repsText = repsText,
+        isBodyweight = isBodyweight,
+    )
 }
 
 // ─── Cardio Workout Form ────────────────────────────────────────────────────

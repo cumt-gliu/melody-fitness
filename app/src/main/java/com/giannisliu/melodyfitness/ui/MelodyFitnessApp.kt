@@ -53,8 +53,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.giannisliu.melodyfitness.data.repository.GoalInput
 import com.giannisliu.melodyfitness.data.repository.GoalType
+import com.giannisliu.melodyfitness.data.repository.CardioEntryInput
 import com.giannisliu.melodyfitness.data.repository.StrengthExerciseHistory
+import com.giannisliu.melodyfitness.data.repository.StrengthExerciseInput
+import com.giannisliu.melodyfitness.data.repository.StrengthSetInput
 import com.giannisliu.melodyfitness.data.repository.WeightUnit
+import com.giannisliu.melodyfitness.data.repository.WorkoutHistoryEditInput
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -126,6 +130,7 @@ fun MelodyFitnessApp(
                 weightUnit = settingsUiState.weightUnit,
                 onStartRecording = { currentScreen = Screen.RECORD },
                 onOpenHistory = { currentScreen = Screen.HISTORY },
+                onDuplicateWorkout = viewModel::duplicateWorkoutHistoryItem,
             )
 
             Screen.RECORD -> RecordScreen(
@@ -139,7 +144,8 @@ fun MelodyFitnessApp(
             Screen.HISTORY -> HistoryScreen(
                 paddingValues = paddingValues,
                 uiState = historyUiState,
-                onUpdateWorkout = viewModel::updateWorkoutHistoryItem,
+                onUpdateWorkoutDetails = viewModel::updateWorkoutHistoryDetails,
+                onDuplicateWorkout = viewModel::duplicateWorkoutHistoryItem,
                 onDeleteWorkout = viewModel::deleteWorkoutHistoryItem,
             )
 
@@ -176,180 +182,84 @@ private fun HomeScreen(
     weightUnit: WeightUnit,
     onStartRecording: () -> Unit,
     onOpenHistory: () -> Unit,
+    onDuplicateWorkout: (Long) -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(paddingValues)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(28.dp))
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            Color(0xFF275844),
-                            Color(0xFF4E8A6C),
-                            Color(0xFFCC9A62),
-                        ),
-                    ),
-                )
-                .padding(20.dp),
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "今天也继续积累",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Color(0xFFFFF7EE),
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    text = "本周训练 ${uiState.weeklyWorkoutCount} 次${uiState.latestWeightKg?.let { " · 最新体重 ${formatWeight(it, weightUnit)}" } ?: ""}",
-                    color = Color(0xFFF7EFE1),
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = onStartRecording) {
-                        Text("开始记录")
-                    }
-                    TextButton(onClick = onOpenHistory) {
-                        Text("查看历史")
-                    }
-                }
-            }
-        }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
-        uiState.latestBodyMetric?.let { metric ->
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(
+                                Color(0xFF275844),
+                                Color(0xFF4E8A6C),
+                                Color(0xFFCC9A62),
+                            ),
+                        ),
+                    )
+                    .padding(20.dp),
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "最新身体状态",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
+                        text = "今天也继续积累",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = Color(0xFFFFF7EE),
+                        fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        text = "${metric.dateText} · ${formatWeight(metric.weightKg, weightUnit)}",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = "本周训练 ${uiState.weeklyWorkoutCount} 次${uiState.latestWeightKg?.let { " · 最新体重 ${formatWeight(it, weightUnit)}" } ?: ""}",
+                        color = Color(0xFFF7EFE1),
                     )
+                    uiState.recentWorkouts.firstOrNull()?.let { latestWorkout ->
+                        Text(
+                            text = "上次：${latestWorkout.title} · ${latestWorkout.detailText}",
+                            color = Color(0xFFF7EFE1),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
                     FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        metric.bodyFatPercentage?.let {
-                            FilterChip(
-                                selected = false,
-                                onClick = {},
-                                label = { Text("体脂 ${formatFloat(it)}%") },
-                            )
+                        Button(onClick = onStartRecording) {
+                            Text("开始记录")
                         }
-                        metric.waistCm?.let {
-                            FilterChip(
-                                selected = false,
-                                onClick = {},
-                                label = { Text("腰围 ${formatFloat(it)} cm") },
-                            )
+                        uiState.recentWorkouts.firstOrNull()?.let { latestWorkout ->
+                            Button(
+                                onClick = {
+                                    onDuplicateWorkout(latestWorkout.id)
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar("已复制最近训练到今天")
+                                    }
+                                },
+                            ) {
+                                Text("复制最近")
+                            }
                         }
-                        metric.sleepHours?.let {
-                            FilterChip(
-                                selected = false,
-                                onClick = {},
-                                label = { Text("睡眠 ${formatFloat(it)} h") },
-                            )
+                        TextButton(onClick = onOpenHistory) {
+                            Text("查看历史")
                         }
-                        metric.fatigueScore?.let {
-                            FilterChip(
-                                selected = false,
-                                onClick = {},
-                                label = { Text("疲劳 ${it}/10") },
-                            )
-                        }
-                    }
-                    if (metric.notes.isNotBlank()) {
-                        Text(
-                            text = metric.notes,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
                     }
                 }
             }
-        }
 
-        SectionTitle(title = "最近训练")
-        if (uiState.recentWorkouts.isEmpty()) {
-            EmptyCard(
-                title = "还没有训练记录",
-                body = "先去记录一次力量、有氧或身体状态，首页就会开始有内容。",
-            )
-        } else {
-            uiState.recentWorkouts.forEach { workout ->
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Text(
-                            text = workout.title,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            text = "${workout.dateText} · ${workout.detailText}",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun HistoryScreen(
-    paddingValues: PaddingValues,
-    uiState: HistoryUiState,
-    onUpdateWorkout: (Long, String, String) -> Unit,
-    onDeleteWorkout: (Long) -> Unit,
-) {
-    var expandedWorkoutId by rememberSaveable { mutableStateOf<Long?>(null) }
-    var editingWorkoutId by rememberSaveable { mutableStateOf<Long?>(null) }
-    var deletingWorkoutId by rememberSaveable { mutableStateOf<Long?>(null) }
-    var editingTitle by rememberSaveable { mutableStateOf("") }
-    var editingNotes by rememberSaveable { mutableStateOf("") }
-
-    val editingWorkout = uiState.workouts.firstOrNull { it.id == editingWorkoutId }
-    val deletingWorkout = uiState.workouts.firstOrNull { it.id == deletingWorkoutId }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(paddingValues)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        SectionTitle(title = "历史记录")
-        if (uiState.workouts.isEmpty()) {
-            EmptyCard(
-                title = "还没有历史训练",
-                body = "保存几次训练后，这里会按时间展示每次记录的动作、组数和有氧详情。",
-            )
-        } else {
-            uiState.workouts.forEach { workout ->
+            uiState.latestBodyMetric?.let { metric ->
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surface,
@@ -359,57 +269,303 @@ private fun HistoryScreen(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
+                        Text(
+                            text = "最新身体状态",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = "${metric.dateText} · ${formatWeight(metric.weightKg, weightUnit)}",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(
-                                    text = workout.title,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Text(
-                                    text = "${workout.dateText} · ${workout.detailText}",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            metric.bodyFatPercentage?.let {
+                                FilterChip(
+                                    selected = false,
+                                    onClick = {},
+                                    label = { Text("体脂 ${formatFloat(it)}%") },
                                 )
                             }
-                            TextButton(
-                                onClick = {
-                                    expandedWorkoutId =
-                                        if (expandedWorkoutId == workout.id) null else workout.id
-                                },
-                            ) {
-                                Text(if (expandedWorkoutId == workout.id) "收起" else "详情")
+                            metric.waistCm?.let {
+                                FilterChip(
+                                    selected = false,
+                                    onClick = {},
+                                    label = { Text("腰围 ${formatFloat(it)} cm") },
+                                )
+                            }
+                            metric.sleepHours?.let {
+                                FilterChip(
+                                    selected = false,
+                                    onClick = {},
+                                    label = { Text("睡眠 ${formatFloat(it)} h") },
+                                )
+                            }
+                            metric.fatigueScore?.let {
+                                FilterChip(
+                                    selected = false,
+                                    onClick = {},
+                                    label = { Text("疲劳 ${it}/10") },
+                                )
                             }
                         }
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            TextButton(
-                                onClick = {
-                                    editingWorkoutId = workout.id
-                                    editingTitle = workout.title
-                                    editingNotes = workout.notes
-                                },
-                            ) {
-                                Text("编辑")
-                            }
-                            TextButton(
-                                onClick = { deletingWorkoutId = workout.id },
-                            ) {
-                                Text("删除")
-                            }
-                        }
-
-                        if (expandedWorkoutId == workout.id) {
-                            HistoryDetailSection(
-                                strengthExercises = workout.strengthExercises,
-                                cardioSummary = workout.cardioEntries.map {
-                                    "${it.activityType} · ${it.durationMinutes} 分钟 · ${formatFloat(it.distanceKm)} km${if (it.averagePace.isNotBlank()) " · ${it.averagePace}" else ""}"
-                                },
-                                notes = workout.notes,
+                        if (metric.notes.isNotBlank()) {
+                            Text(
+                                text = metric.notes,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                        }
+                    }
+                }
+            }
+
+            SectionTitle(title = "最近训练")
+            if (uiState.recentWorkouts.isEmpty()) {
+                EmptyCard(
+                    title = "还没有训练记录",
+                    body = "先去记录一次力量、有氧或身体状态，首页就会开始有内容。",
+                )
+            } else {
+                uiState.recentWorkouts.forEach { workout ->
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                        ),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                text = workout.title,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                text = "${workout.dateText} · ${workout.detailText}",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private data class HistorySetDraft(
+    val weightText: String = "",
+    val repsText: String = "",
+)
+
+private data class HistoryExerciseDraft(
+    val name: String = "",
+    val sets: List<HistorySetDraft> = emptyList(),
+)
+
+private data class HistoryCardioDraft(
+    val activityType: String = "",
+    val durationText: String = "",
+    val distanceText: String = "",
+    val paceText: String = "",
+)
+
+private fun List<HistoryExerciseDraft>.updateSet(
+    exerciseIndex: Int,
+    setIndex: Int,
+    transform: (HistorySetDraft) -> HistorySetDraft,
+): List<HistoryExerciseDraft> {
+    return mapIndexed { index, exercise ->
+        if (index == exerciseIndex) {
+            exercise.copy(
+                sets = exercise.sets.mapIndexed { currentSetIndex, set ->
+                    if (currentSetIndex == setIndex) transform(set) else set
+                },
+            )
+        } else {
+            exercise
+        }
+    }
+}
+
+private fun List<HistoryCardioDraft>.updateCardio(
+    cardioIndex: Int,
+    transform: (HistoryCardioDraft) -> HistoryCardioDraft,
+): List<HistoryCardioDraft> {
+    return mapIndexed { index, cardio ->
+        if (index == cardioIndex) transform(cardio) else cardio
+    }
+}
+
+private fun buildWorkoutHistoryEditInput(
+    title: String,
+    notes: String,
+    exercises: List<HistoryExerciseDraft>,
+    cardioEntries: List<HistoryCardioDraft>,
+): WorkoutHistoryEditInput? {
+    if (title.isBlank()) return null
+    val strengthInputs = exercises.map { exercise ->
+        if (exercise.name.isBlank()) return null
+        StrengthExerciseInput(
+            name = exercise.name,
+            sets = exercise.sets.map { set ->
+                StrengthSetInput(
+                    weightKg = set.weightText.toFloatOrNull() ?: return null,
+                    reps = set.repsText.toIntOrNull()?.takeIf { it > 0 } ?: return null,
+                )
+            },
+        )
+    }
+    val cardioInputs = cardioEntries.map { cardio ->
+        if (cardio.activityType.isBlank()) return null
+        CardioEntryInput(
+            activityType = cardio.activityType,
+            durationMinutes = cardio.durationText.toIntOrNull()?.takeIf { it > 0 } ?: return null,
+            distanceKm = cardio.distanceText.toFloatOrNull() ?: return null,
+            averagePace = cardio.paceText,
+        )
+    }
+    return WorkoutHistoryEditInput(
+        title = title,
+        notes = notes,
+        strengthExercises = strengthInputs,
+        cardioEntries = cardioInputs,
+    )
+}
+
+@Composable
+private fun HistoryScreen(
+    paddingValues: PaddingValues,
+    uiState: HistoryUiState,
+    onUpdateWorkoutDetails: (Long, WorkoutHistoryEditInput) -> Unit,
+    onDuplicateWorkout: (Long) -> Unit,
+    onDeleteWorkout: (Long) -> Unit,
+) {
+    var expandedWorkoutId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var editingWorkoutId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var deletingWorkoutId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var editingTitle by rememberSaveable { mutableStateOf("") }
+    var editingNotes by rememberSaveable { mutableStateOf("") }
+    var editingExercises by remember { mutableStateOf<List<HistoryExerciseDraft>>(emptyList()) }
+    var editingCardioEntries by remember { mutableStateOf<List<HistoryCardioDraft>>(emptyList()) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+
+    val editingWorkout = uiState.workouts.firstOrNull { it.id == editingWorkoutId }
+    val deletingWorkout = uiState.workouts.firstOrNull { it.id == deletingWorkoutId }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            SectionTitle(title = "历史记录")
+            if (uiState.workouts.isEmpty()) {
+                EmptyCard(
+                    title = "还没有历史训练",
+                    body = "保存几次训练后，这里会按时间展示每次记录的动作、组数和有氧详情。",
+                )
+            } else {
+                uiState.workouts.forEach { workout ->
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                        ),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(
+                                        text = workout.title,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    Text(
+                                        text = "${workout.dateText} · ${workout.detailText}",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                TextButton(
+                                    onClick = {
+                                        expandedWorkoutId =
+                                            if (expandedWorkoutId == workout.id) null else workout.id
+                                    },
+                                ) {
+                                    Text(if (expandedWorkoutId == workout.id) "收起" else "详情")
+                                }
+                            }
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                TextButton(
+                                    onClick = {
+                                        onDuplicateWorkout(workout.id)
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar("已复制为今天的训练")
+                                        }
+                                    },
+                                ) {
+                                    Text("复制为今天")
+                                }
+                                TextButton(
+                                    onClick = {
+                                        editingWorkoutId = workout.id
+                                        editingTitle = workout.title
+                                        editingNotes = workout.notes
+                                        editingExercises = workout.strengthExercises.map { exercise ->
+                                            HistoryExerciseDraft(
+                                                name = exercise.name,
+                                                sets = exercise.sets.map { set ->
+                                                    HistorySetDraft(
+                                                        weightText = formatFloat(set.weightKg),
+                                                        repsText = set.reps.toString(),
+                                                    )
+                                                },
+                                            )
+                                        }
+                                        editingCardioEntries = workout.cardioEntries.map { cardio ->
+                                            HistoryCardioDraft(
+                                                activityType = cardio.activityType,
+                                                durationText = cardio.durationMinutes.toString(),
+                                                distanceText = formatFloat(cardio.distanceKm),
+                                                paceText = cardio.averagePace,
+                                            )
+                                        }
+                                    },
+                                ) {
+                                    Text("编辑")
+                                }
+                                TextButton(
+                                    onClick = { deletingWorkoutId = workout.id },
+                                ) {
+                                    Text("删除")
+                                }
+                            }
+
+                            if (expandedWorkoutId == workout.id) {
+                                HistoryDetailSection(
+                                    strengthExercises = workout.strengthExercises,
+                                    cardioSummary = workout.cardioEntries.map {
+                                        "${it.activityType} · ${it.durationMinutes} 分钟 · ${formatFloat(it.distanceKm)} km${if (it.averagePace.isNotBlank()) " · ${it.averagePace}" else ""}"
+                                    },
+                                    notes = workout.notes,
+                                )
+                            }
                         }
                     }
                 }
@@ -418,11 +574,20 @@ private fun HistoryScreen(
     }
 
     if (editingWorkout != null) {
+        val editInput = buildWorkoutHistoryEditInput(
+            title = editingTitle,
+            notes = editingNotes,
+            exercises = editingExercises,
+            cardioEntries = editingCardioEntries,
+        )
         AlertDialog(
             onDismissRequest = { editingWorkoutId = null },
             title = { Text("编辑历史记录") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
                     OutlinedTextField(
                         value = editingTitle,
                         onValueChange = { editingTitle = it },
@@ -435,19 +600,139 @@ private fun HistoryScreen(
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("训练备注") },
                     )
+                    if (editingExercises.isNotEmpty()) {
+                        Text("力量动作", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        editingExercises.forEachIndexed { exerciseIndex, exercise ->
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                ),
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    OutlinedTextField(
+                                        value = exercise.name,
+                                        onValueChange = { name ->
+                                            editingExercises = editingExercises.mapIndexed { index, item ->
+                                                if (index == exerciseIndex) item.copy(name = name) else item
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        label = { Text("动作名称") },
+                                    )
+                                    exercise.sets.forEachIndexed { setIndex, set ->
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            OutlinedTextField(
+                                                value = set.weightText,
+                                                onValueChange = { weight ->
+                                                    editingExercises = editingExercises.updateSet(
+                                                        exerciseIndex = exerciseIndex,
+                                                        setIndex = setIndex,
+                                                    ) { it.copy(weightText = weight) }
+                                                },
+                                                modifier = Modifier.weight(1f),
+                                                label = { Text("重量 kg") },
+                                            )
+                                            OutlinedTextField(
+                                                value = set.repsText,
+                                                onValueChange = { reps ->
+                                                    editingExercises = editingExercises.updateSet(
+                                                        exerciseIndex = exerciseIndex,
+                                                        setIndex = setIndex,
+                                                    ) { it.copy(repsText = reps) }
+                                                },
+                                                modifier = Modifier.weight(1f),
+                                                label = { Text("次数") },
+                                            )
+                                        }
+                                    }
+                                    TextButton(
+                                        onClick = {
+                                            val lastSet = exercise.sets.lastOrNull() ?: HistorySetDraft()
+                                            editingExercises = editingExercises.mapIndexed { index, item ->
+                                                if (index == exerciseIndex) item.copy(sets = item.sets + lastSet) else item
+                                            }
+                                        },
+                                    ) {
+                                        Text("新增一组")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (editingCardioEntries.isNotEmpty()) {
+                        Text("有氧记录", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        editingCardioEntries.forEachIndexed { cardioIndex, cardio ->
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                ),
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    OutlinedTextField(
+                                        value = cardio.activityType,
+                                        onValueChange = { value ->
+                                            editingCardioEntries = editingCardioEntries.updateCardio(cardioIndex) {
+                                                it.copy(activityType = value)
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        label = { Text("项目") },
+                                    )
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedTextField(
+                                            value = cardio.durationText,
+                                            onValueChange = { value ->
+                                                editingCardioEntries = editingCardioEntries.updateCardio(cardioIndex) {
+                                                    it.copy(durationText = value)
+                                                }
+                                            },
+                                            modifier = Modifier.weight(1f),
+                                            label = { Text("分钟") },
+                                        )
+                                        OutlinedTextField(
+                                            value = cardio.distanceText,
+                                            onValueChange = { value ->
+                                                editingCardioEntries = editingCardioEntries.updateCardio(cardioIndex) {
+                                                    it.copy(distanceText = value)
+                                                }
+                                            },
+                                            modifier = Modifier.weight(1f),
+                                            label = { Text("距离 km") },
+                                        )
+                                    }
+                                    OutlinedTextField(
+                                        value = cardio.paceText,
+                                        onValueChange = { value ->
+                                            editingCardioEntries = editingCardioEntries.updateCardio(cardioIndex) {
+                                                it.copy(paceText = value)
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        label = { Text("配速 / 平均心率") },
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        onUpdateWorkout(
+                        val input = requireNotNull(editInput)
+                        onUpdateWorkoutDetails(
                             editingWorkout.id,
-                            editingTitle,
-                            editingNotes,
+                            input,
                         )
                         editingWorkoutId = null
                     },
-                    enabled = editingTitle.isNotBlank(),
+                    enabled = editInput != null,
                 ) {
                     Text("保存")
                 }

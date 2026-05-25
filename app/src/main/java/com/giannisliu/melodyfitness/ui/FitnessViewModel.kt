@@ -19,7 +19,9 @@ import com.giannisliu.melodyfitness.data.repository.SparklineData
 import com.giannisliu.melodyfitness.data.repository.StrengthWorkoutInput
 import com.giannisliu.melodyfitness.data.repository.WeekOverWeekChanges
 import com.giannisliu.melodyfitness.data.repository.WeeklyWorkoutCount
+import com.giannisliu.melodyfitness.data.repository.WeeklyTrainingComparison
 import com.giannisliu.melodyfitness.data.repository.WeightUnit
+import com.giannisliu.melodyfitness.data.repository.WorkoutHistoryEditInput
 import com.giannisliu.melodyfitness.data.repository.WorkoutHistoryItem
 import com.giannisliu.melodyfitness.data.repository.WorkoutSummary
 import com.giannisliu.melodyfitness.data.repository.WorkoutTypeCount
@@ -103,6 +105,7 @@ data class StatsUiState(
     // Tab 1: Training analysis
     val workoutTypeDistribution: List<WorkoutTypeCount> = emptyList(),
     val cardioDurationTrend: List<CardioDurationPoint> = emptyList(),
+    val weeklyTrainingComparison: List<WeeklyTrainingComparison> = emptyList(),
     // Tab 3: Strength progress
     val strengthExerciseTrends: Map<String, List<StrengthTrendPoint>> = emptyMap(),
     val strengthExerciseNames: List<String> = emptyList(),
@@ -176,6 +179,7 @@ class FitnessViewModel(
         val distribution: List<WorkoutTypeCount> = emptyList(),
         val cardioTrend: List<CardioDurationPoint> = emptyList(),
         val weeklyCounts: List<WeeklyWorkoutCount> = emptyList(),
+        val weeklyComparison: List<WeeklyTrainingComparison> = emptyList(),
     )
 
     private val tabTrainingData: StateFlow<TabTrainingData> = selectedTimeRange
@@ -185,8 +189,9 @@ class FitnessViewModel(
                 repository.observeCardioByDateRange(start, end),
                 repository.observeCardioDurationTrend(start, end),
                 repository.observeWeeklyWorkoutCounts(weeks = 8),
-            ) { distribution, cardioTrend, weeklyCounts ->
-                TabTrainingData(distribution, cardioTrend, weeklyCounts)
+                repository.observeWeeklyTrainingComparison(weeks = 8),
+            ) { distribution, cardioTrend, weeklyCounts, weeklyComparison ->
+                TabTrainingData(distribution, cardioTrend, weeklyCounts, weeklyComparison)
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TabTrainingData())
 
@@ -219,6 +224,7 @@ class FitnessViewModel(
             workoutTypeDistribution = trainingData.distribution,
             cardioDurationTrend = trainingData.cardioTrend,
             weeklyWorkoutCounts = trainingData.weeklyCounts,
+            weeklyTrainingComparison = trainingData.weeklyComparison,
             strengthExerciseTrends = strengthMap,
             strengthExerciseNames = exerciseNames,
             selectedExercise = effectiveExercise,
@@ -292,6 +298,21 @@ class FitnessViewModel(
     fun deleteWorkoutHistoryItem(workoutId: Long) {
         viewModelScope.launch {
             repository.deleteWorkoutHistoryItem(workoutId)
+        }
+    }
+
+    fun duplicateWorkoutHistoryItem(workoutId: Long) {
+        viewModelScope.launch {
+            repository.duplicateWorkoutHistoryItem(workoutId)
+        }
+    }
+
+    fun updateWorkoutHistoryDetails(
+        workoutId: Long,
+        input: WorkoutHistoryEditInput,
+    ) {
+        viewModelScope.launch {
+            repository.updateWorkoutHistoryDetails(workoutId, input)
         }
     }
 
